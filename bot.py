@@ -115,18 +115,15 @@ class ShadowThread():
     self.awaitresponse('You enter the ork headquarters.')
 
   def printloop(self):
-    if self.doquit:
-      return
-    func = str(self.doloop)
-    if func != 'None':
-      fncounter = 0
-      while not self.doquit and self.doloop is not None:
-        getattr(self,func)(fncounter)
-        fncounter+=1
-        time.sleep(3)
-    if not self.doquit:
-      self.irc.get_response()
-      time.sleep(15)
-    if not self.doquit:
-      self.printloop()
+    while not self.doquit:
+      func = str(self.doloop)
+      if func != 'None':
+        fncounter = 0
+        while not self.doquit and func == str(self.doloop):
+          getattr(self,func)(fncounter)
+          fncounter+=1
+          time.sleep(3)
+      else:
+        self.irc.get_response()
+        time.sleep(15)
 
