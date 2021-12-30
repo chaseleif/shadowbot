@@ -76,9 +76,14 @@ class ShadowThread():
         if line.startswith('You are inside'):
           if location in line:
             return
-          self.irc.privmsg(self.lambbot, '#leave')
-          self.irc.get_response()
-          return self.gotoloc(location)
+          if 'Subway' in line:
+            currloc = line.split(' ')[-1]
+            if currloc[-1] == '.':
+              currloc = currloc[:-1]
+          else:
+            self.irc.privmsg(self.lambbot, '#leave')
+            self.irc.get_response()
+            return self.gotoloc(location)
         elif line.startswith('You are outside'):
           print('You are outside is in line')
           if location in line:
@@ -93,6 +98,9 @@ class ShadowThread():
           if currloc[-1] == '.':
             currloc = currloc[:-1]
           print(currloc)
+          if 'Subway' in currloc:
+            self.irc.privmsg(self.lambbot, '#enter')
+            self.irc.get_response()
         elif line.startswith('You are fighting'): # any combat logic
           time.sleep(30)
           return self.gotoloc(location)
