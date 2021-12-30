@@ -24,7 +24,7 @@ class ShadowThread():
   def __init__(self, irc, lambbot='Lamb3'):
     self.lambbot = lambbot
     self.irc = irc
-    self.th = threading.Thread(target=self.printloop)
+    self.th = threading.Thread(target=self.printloop, daemon=True)
     self.th.start()
 
   def __del__(self):
@@ -33,11 +33,12 @@ class ShadowThread():
     self.th.join()
 
   def awaitresponse(self, quitmsg):
-    print('Awaiting response: '+str(quitmsg))
+    print('  Awaiting response: '+str(quitmsg))
     while True:
       response = self.irc.get_response(timeout=120)
       response = response.split('\n')
       for line in response:
+        if self.lambbot not in line: continue
         if ':' not in line: continue
         line = line.split(':')[-1]
         if quitmsg in line:
@@ -45,7 +46,7 @@ class ShadowThread():
         #if 'You ENCOUNTER ' in line: # Starting combat
         #if 'You meet ' in line:      # Meet a civilian
         #if attacked, and hp falls below a threshhold ...
-        print(' unhandled: \"'+line+'\"')
+        print('  unhandled: \"'+line+'\"')
 
   def cityrank(self,city):
     if city=='Chicago': return 4
@@ -54,9 +55,9 @@ class ShadowThread():
     return 1
 
   def walkpath(self,path):
-    print('Entering walkpath, path = '+str(path))
+    print('  Entering walkpath, path = '+str(path))
     for point in path:
-      print('Point = '+point)
+      print('  Point = '+point)
       self.irc.privmsg(self.lambbot, '#goto ' + point)
       self.awaitresponse(entermsg[point])
 
@@ -108,11 +109,12 @@ class ShadowThread():
   def getbacon(self, fncounter=0):
     if fncounter < 1:
       self.gotoloc('Redmond_OrkHQ')
+    else:
+      self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('You enter the ork headquarters.')
     self.walkpath(['OrkHQ_StorageRoom','Exit'])
     self.irc.privmsg(self.lambbot, '#leave')
     self.awaitresponse('You arrive at Redmond.')
-    self.irc.privmsg(self.lambbot, '#enter')
-    self.awaitresponse('You enter the ork headquarters.')
 
   def printloop(self):
     while not self.doquit:

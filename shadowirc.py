@@ -4,9 +4,10 @@ from time import sleep
 import socket, selectors
 
 class IRCHandler():
-  irc       = None
-  remainder = ''
-  poller    = None
+  irc        = None
+  remainder  = ''
+  poller     = None
+  username   = ''
   printinmsg = True
 
   def __init__(self, server, port, botnick, botpass):
@@ -15,30 +16,31 @@ class IRCHandler():
     self.connect(server, port, botnick, botpass)
     self.poller = selectors.DefaultSelector()
     self.poller.register(self.irc, selectors.EVENT_READ)
-    print('Waiting for identify for ' + botnick)
+    print('  Waiting for identify for ' + botnick)
     while True:
       resp = self.get_response()
       if 'Last login from: ' in resp:
         break
-    print('Identified as ' + botnick)
+    print('  Identified as ' + botnick)
+    self.username = botnick
 
   def __del__(self):
     try:
       self.poller.close()
     except Exception as e:
-      print('IRCHandler exception closing selector: ' + str(e))
+      print('  IRCHandler exception closing selector: ' + str(e))
     try:
       self.irc.shutdown(socket.SHUT_RDWR)
       self.irc.close()
     except Exception as e:
-      print('IRCHandler exception closing socket: ' + str(e))
+      print('  IRCHandler exception closing socket: ' + str(e))
 
   def send(self, msg):
-    print('IRC, sending: \"'+msg+'\"')
+    print('  IRC, sending: \"'+msg+'\"')
     self.irc.sendall(bytes(msg + '\n', 'UTF-8'))
 
   def connect(self, server, port, botnick, botpass):
-    print('Connecting to ' + server + ':' + str(port))
+    print('  Connecting to ' + server + ':' + str(port))
     self.irc.connect((server, port))
     self.send('USER ' + botnick + ' ' + botnick + ' ' + botnick + ' :ShadowBot')
     self.send('NICK ' + botnick)
@@ -72,7 +74,7 @@ class IRCHandler():
     elif self.remainder == '1':
       self.remainder = ''
     if self.printinmsg:
-      print('\n'.join(resp))
+      print('\n'+'\n'.join(resp))
     return '\n'.join(resp)
 
   def joinchan(self,chan):
