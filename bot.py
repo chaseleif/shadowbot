@@ -69,25 +69,35 @@ class ShadowThread():
       # You are {inside,outside,fighting,exploring,going}
       # leave whatever location we are in, or enter if it is right
       for line in resp.split('\n'):
+        if self.lambbot not in line or self.irc.username not in line: continue
         if ':' not in line: continue
         line = line.strip().split(':')[-1]
-        if line.startswith('You are inside '):
+        print('The line = \"'+line+'\"')
+        if line.startswith('You are inside'):
           if location in line:
             return
           self.irc.privmsg(self.lambbot, '#leave')
           self.irc.get_response()
           return self.gotoloc(location)
         elif line.startswith('You are outside'):
+          print('You are outside is in line')
           if location in line:
+            print('Location is in line')
             self.irc.privmsg(self.lambbot, '#enter')
             self.irc.get_response()
             return
-          # last word, minus the period
-          currloc = line.split(' ')[-1][:-1]
-        elif line.startswith('You are fighting '): # any combat logic
+          # last word
+          print('Setting currloc')
+          currloc = line.split(' ')[-1]
+          print(currloc)
+          if currloc[-1] == '.':
+            currloc = currloc[:-1]
+          print(currloc)
+        elif line.startswith('You are fighting'): # any combat logic
           time.sleep(30)
           return self.gotoloc(location)
-        elif line.startswith('You are '): # exploring / going to
+        elif line.startswith('You are'): # exploring / going to
+          print('Matching the last you are ... saying stop')
           self.irc.privmsg(self.lambbot, '#stop')
           self.irc.get_response()
           return self.gotoloc(location)

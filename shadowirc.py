@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 from time import sleep
-import socket, selectors
+import re, socket, selectors
 
 class IRCHandler():
   irc        = None
@@ -75,7 +75,8 @@ class IRCHandler():
       self.remainder = ''
     if self.printinmsg:
       print('\n'+'\n'.join(resp))
-    return '\n'.join(resp)
+    # remove some special garbage characters
+    return re.sub('[\002\003\015]','','\n'.join(resp))
 
   def joinchan(self,chan):
     self.send('JOIN ' + chan)

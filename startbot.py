@@ -44,7 +44,7 @@ while True:
   print('4) Clear Lamb bot function')
   print('5) Join a channel')
   print('6) Send a message from the bot')
-  print('7) Allow thread to normally exit and quit')
+  print('7) Allow thread to finish its current task, normally exit and quit')
   print('8) Immediately abort thread and quit')
   print('9) Hide this menu')
   resp = input('Enter your selection: ')
