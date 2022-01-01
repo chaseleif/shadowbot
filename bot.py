@@ -36,6 +36,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
     islambmsg     - Returns bool indicating whether a message is from the Lamb bot
     getlambmsg    - Returns a string, the stripped message from the Lamb bot
     awaitresponse - Awaits a specific response from the Lamb bot, returns the string response
+    handlecombat  - Called when in combat, returns when combat is over
     cityrank      - Returns an ordinal value for cities, used for subway travel
     walkpath      - Issues "goto" commands for all locations within a list to walk a path
     gotoloc       - Travels to a destination location
@@ -43,6 +44,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
 
     Doloop Methods
     getbacon      - Goes to the OrkHQ, then repeatedly kills FatOrk to get bacon
+    explore       - Explores the current city on a loop
 '''
 class ShadowThread():
   th         = None         # A reference to the running thread
@@ -127,7 +129,7 @@ class ShadowThread():
         line = self.getlambmsg(response[i])
         # We have seen our quit msg, return the line
         if quitmsg in line:
-          return line
+          return '\n'.join(response[i:])
         # We meet a citizen or another player
         # This will occur when we are walking within cities
         elif 'You meet ' in line:
@@ -136,17 +138,22 @@ class ShadowThread():
             # Say the message and get their reply
             self.irc.privmsg(self.lambbot, '#say ' + self.meetsay)
             # Give a moment of time for a response . . .
-            time.sleep(5)
+            time.sleep(15)
           # Say bye to them, this will close an interation with a citizen
           self.irc.privmsg(self.lambbot, '#bye')
         # Starting combat
         elif 'You ENCOUNTER ' in line or 'You are fighting' in line:
-          while i != len(response) and 'You continue' not in response[i]:
-            i+=1
-          newlines = self.handlecombat('\n'.join(response[i+1:])).split('\n')
-          for newline in newlines:
-            response.append(newline)
-          i = x-1
+          x = i
+          while x != len(response) and 'You continue' not in response[x]:
+            x += 1
+          # If 'You continue' was in the response
+          if x < len(response):
+            i = x
+          else:
+            # We get a new list from the handle combat function
+            response = self.handlecombat(response[i:])
+            # 'i' will be reset to zero at the bottom of this loop
+            i = -1
         # You gained some MP
         elif 'You gained +' in line:
           pass
@@ -161,57 +168,125 @@ class ShadowThread():
   ''' handlecombat
       Combat handler, returns when combat is complete
       Any special combat actions go here
+
+      Parameters
+      msg         - list, each line a string in the current message buffer
+                    Element zero will contain the line 'You ENCOUNTER' or 'are fighting'
+
+      Returns
+      msg         - list, each line a string in the current message buffer
+                    Element zero will be the first line beyond 'You continue'
+                    The returned list may be empty
   '''
-  def handlecombat(self, msg=''):
-    # Ensure we are in combat, so we don't enter some infinite loop
-    self.irc.privmsg(self.lambbot, '#party')
-    resp = msg
-    if 'You continue' in resp:
-      ret = None
-      for line in resp.split('\n'):
-        if 'You continue' in line:
-          ret = ''
-        elif ret is not None:
-          ret += '\n' + line
-      if ret is None:
-        ret = ''
-      return ret
-    while 'You are fighting' not in msg:
-      resp = self.irc.get_response()
-      # combat has finished
-      if 'You continue' in resp:
-        ret = None
-        for line in resp:
-          if ret is None and 'You continue' in line:
-            ret = ''
-          elif ret is not None:
-            ret += '\n' + line
-          else:
-            ret = line
-        if ret is None:
-          ret = ''
-        return ret
-    enemies = []
-    # We are verified to be in combat and haven't gotten the finish message yet
-    while 'You continue' not in resp:
-      # if find in line 'drone', attack them first.
-      # otherwise, attack players in increasing order of level, ...
-      # ..., if hp falls below a threshhold, ...
-      self.irc.privmsg(self.lambbot, '#party')
-      resp = self.irc.get_response()
-      time.sleep(20)
-    # return any text after the combat, in case it is needed elsewhere
-    ret = None
-    for line in resp.split('\n'):
-      if ret is None and 'You continue' in line:
-        ret = ''
-      elif ret is not None:
-        ret += '\n' + line
-      else:
-        ret = line
-    if ret is None:
-      ret = ''
-    return ret
+  def handlecombat(self, msg=[]):
+    class ShadowEnemy():
+      name = ''
+      distance = 0
+      level = 0
+      def __init__(self,nm,dist,lev):
+        self.name = nm
+        self.distance = dist
+        self.level = lev
+
+    line = self.getlambmsg(msg[0])
+    if 'You ENCOUNTER' in line:
+      line = line[14:]
+    else:
+      line = '.'.join(line.split('.')[:-2])
+    parts = line.split(', ')
+
+    enemies = {}
+    havetarget = None
+    for part in parts:
+      num = int(part.split('-')[0].strip())
+      name = part.split('-')[1].split('[')[0]
+      dist = float(part.split('(')[1][:-2])
+      lvl = int(part.split('(')[2][1:].split(')')[0])
+      enemies[num] = ShadowEnemy(name,dist,lvl)
+      print('Enemy '+str(num)+') '+name+' L'+str(lvl)+' at '+str(dist)+'m')
+      if havetarget is None and 'Drone' in name:
+        # Save the current target as the index of enemies[]
+        havetarget = num
+
+    if havetarget is None:
+      lowlevel = 9999
+      for enemy in enemies:
+        if enemies[enemy].level < lowlevel:
+          lowlevel = enemies[enemy].level
+          havetarget = enemy
+
+    # shouldn't be . . .
+    if havetarget is not None:
+      print('Target is '+str(havetarget))
+      self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
+
+    calmcasttime = 0
+    calmcastgap = 90
+
+    i = 1
+    while True:
+      if i == len(msg):
+        msg = self.irc.get_response(timeout=45).split('\n')
+        i = 0
+        continue
+      if not self.islambmsg(msg[i]):
+        i += 1
+        continue
+      line = self.getlambmsg(msg[i])
+      if 'You continue' in line:
+        break
+      # Combat
+      if 'misses' in line:
+        pass
+      elif 'attacks' in line:
+        if line[re.search('[\d]+-',line).span()[1]:].startswith(self.irc.username):
+          # We killed an enemy
+          if 'killed them' in line:
+            num = int(line.split('attacks ')[1].split('-')[0].strip())
+            del(enemies[num])
+            if len(enemies) == 0:
+              break
+            havetarget = None
+            for enemy in enemies:
+              if 'Drone' in enemies[enemy].name:
+                self.irc.privmsg(self.lambbot, '#attack ' + str(enemy))
+                havetarget = enemy
+                break
+            if havetarget is None:
+              lowlevel = 9999
+              for enemy in enemies:
+                if enemies[enemy].level < lowlevel:
+                  lowlevel = enemies[enemy].level
+                  havetarget = enemy
+            if havetarget is not None:
+              self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
+        # Enemy attacked
+        else:
+          # uh oh
+          if 'killed' in line:
+            self.doloop = None
+            return msg[i+1:]
+          # "68.7/72.6"
+          health = line.split(', ')[1].split('HP')[0]
+          numerator = health.split('/')[0]
+          denominator = health.split('/')[1]
+          health = float(numerator)/float(denominator)
+          # Less than 30% health
+          if health < 0.3:
+            self.irc.privmsg(self.lambbot, '#cast calm')
+          # Less than 50% health
+          elif health < 0.5:
+            if time.time() - castcalmtime > calmcastgap - 15:
+              self.irc.privmsg(self.lambbot, '#cast calm')
+              castcalmtime = time.time()
+          # Less than 70% health
+          elif health < 0.7:
+            if time.time() - calmcasttime > calmcastgap:
+              self.irc.privmsg(self.lambbot, '#cast calm')
+              calmcasttime = time.time()
+      i += 1
+    # return any remaining text (as a list of lines) after combat
+    return msg[i+1:]
 
   ''' cityrank
       Returns an ordering, this is used to determine direction of subway travel
@@ -291,10 +366,11 @@ class ShadowThread():
             if 'You continue' in line:
               break
           i = x-1
-          if i == len(resp):
-            newlines = handlecombat('\n'.join(resp[i+1:]))
-            for newline in newlines.split('\n'):
-              resp.append(newline)
+          # Entering the handlecombat function doesn't work quite yet here ...
+          #if i == len(resp):
+          #  #newlines = handlecombat('\n'.join(resp[i+1:]))
+          #  #for newline in newlines.split('\n'):
+          #  #  resp.append(newline)
         # We are exploring, or going to a location, try to stop
         elif line.startswith('You are'):
           # If onsubway then we *just* tried to stop, and didn't
@@ -434,4 +510,37 @@ class ShadowThread():
     # Leave the OrkHQ
     self.irc.privmsg(self.lambbot, '#leave')
     self.awaitresponse(entermsg['Redmond'])
+
+  ''' explore
+      This function simply explores the players current city in a loop.
+      This can be used to grind for xp
+       to search for citizens to #say things to
+        find locations
+       *This can also be used to test the handlecombat method*
+  '''
+  def explore(self, fncounter=0):
+    # Ensure we are stopped
+    if fncounter < 1:
+      self.irc.privmsg(self.lambbot, '#stop')
+      response = self.irc.get_response()
+      stopped = False
+      while not stopped:
+        for line in response.split('\n'):
+          if 'What now?' in line:
+            stopped = True
+            break
+        if not stopped:
+          self.irc.privmsg(self.lambbot, '#party')
+          response = self.irc.get_response()
+          for line in response.split('\n'):
+            if 'You are outside' or 'You are inside' in line:
+              stopped = True
+              break
+        if not stopped:
+          time.sleep(20)
+          self.irc.privmsg(self.lambbot, '#stop')
+          response = self.irc.get_response()
+    self.irc.privmsg(self.lambbot, '#explore')
+    # Not sure if this is the right response for all cases.
+    self.awaitresponse('explored')
 

@@ -150,7 +150,7 @@ def mainmenu():
       print('')
       print('Quit')
       print('1) Allow thread to finish its current task and normally exit')
-      print('   (this properly closes the sockets and whatnot')
+      print('   (this properly closes the sockets and whatnot)')
       print('2) Immediately abort thread and quit')
       print('')
       print(' (anything else to cancel)')
