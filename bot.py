@@ -135,18 +135,23 @@ class ShadowThread():
           if self.meetsay is not None:
             # Say the message and get their reply
             self.irc.privmsg(self.lambbot, '#say ' + self.meetsay)
+            # Give a moment of time for a response . . .
+            time.sleep(5)
           # Say bye to them, this will close an interation with a citizen
           self.irc.privmsg(self.lambbot, '#bye')
         # Starting combat
-        elif 'You ENCOUNTER ' in line:
+        elif 'You ENCOUNTER ' in line or 'You are fighting' in line:
           while i != len(response) and 'You continue' not in response[i]:
             i+=1
-          newlines = self.handlecombat().split('\n')
+          newlines = self.handlecombat('\n'.join(response[i+1:])).split('\n')
           for newline in newlines:
             response.append(newline)
-          i -= 1
+          i = x-1
         # You gained some MP
         elif 'You gained +' in line:
+          pass
+        # Yes, we are going somewhere . . .
+        elif 'You are going to' in line:
           pass
         # This is an unhandled message type
         else:
@@ -157,11 +162,21 @@ class ShadowThread():
       Combat handler, returns when combat is complete
       Any special combat actions go here
   '''
-  def handlecombat(self):
+  def handlecombat(self, msg=''):
     # Ensure we are in combat, so we don't enter some infinite loop
     self.irc.privmsg(self.lambbot, '#party')
-    resp = ''
-    while 'You are fighting' not in resp:
+    resp = msg
+    if 'You continue' in resp:
+      ret = None
+      for line in resp.split('\n'):
+        if 'You continue' in line:
+          ret = ''
+        elif ret is not None:
+          ret += '\n' + line
+      if ret is None:
+        ret = ''
+      return ret
+    while 'You are fighting' not in msg:
       resp = self.irc.get_response()
       # combat has finished
       if 'You continue' in resp:
@@ -271,9 +286,15 @@ class ShadowThread():
         # We are in combat
         elif line.startswith('You are fighting'):
           onsubway = False
-          newlines = handlecombat()
-          for newline in newlines.split('\n'):
-            resp.append(newline)
+          x = i+1
+          while x != len(resp):
+            if 'You continue' in line:
+              break
+          i = x-1
+          if i == len(resp):
+            newlines = handlecombat('\n'.join(resp[i+1:]))
+            for newline in newlines.split('\n'):
+              resp.append(newline)
         # We are exploring, or going to a location, try to stop
         elif line.startswith('You are'):
           # If onsubway then we *just* tried to stop, and didn't

@@ -79,7 +79,10 @@ class IRCHandler():
   def send(self, msg):
     # Give small delays, it helps to keep things from breaking !!!
     time.sleep(2)
-    print('  IRC, sending: \"'+msg+'\"')
+    if msg.startswith('PONG'):
+      print('  IRC, PING PONG PING PONG ! ! !')
+    else:
+      print('  IRC, sending: \"'+msg+'\"')
     self.irc.sendall(bytes(msg + '\n', 'UTF-8'))
 
   ''' connect
