@@ -424,10 +424,11 @@ class ShadowThread():
       # Ensure function not cancelled during travel
       if self.doloop is None:
         return
-    # We are at the OrkHQ, enter the OrkHQ
-    self.irc.privmsg(self.lambbot, '#enter')
-    # Await the entrance message
-    self.awaitresponse(entermsg['Redmond_OrkHQ'])
+    else:
+      # We are at the OrkHQ, enter the OrkHQ
+      self.irc.privmsg(self.lambbot, '#enter')
+      # Await the entrance message
+      self.awaitresponse(entermsg['Redmond_OrkHQ'])
     # Go to the storage room, will fight the FatOrk on entrance, then go to the exit
     self.walkpath(['OrkHQ_StorageRoom','Exit'])
     # Leave the OrkHQ
