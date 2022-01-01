@@ -361,16 +361,8 @@ class ShadowThread():
         # We are in combat
         elif line.startswith('You are fighting'):
           onsubway = False
-          x = i+1
-          while x != len(resp):
-            if 'You continue' in line:
-              break
-          i = x-1
-          # Entering the handlecombat function doesn't work quite yet here ...
-          #if i == len(resp):
-          #  #newlines = handlecombat('\n'.join(resp[i+1:]))
-          #  #for newline in newlines.split('\n'):
-          #  #  resp.append(newline)
+          resp = handlecombat(resp[i:])
+          i = -1
         # We are exploring, or going to a location, try to stop
         elif line.startswith('You are'):
           # If onsubway then we *just* tried to stop, and didn't
