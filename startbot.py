@@ -40,11 +40,12 @@ unavailfuncs = ['islambmsg',
                 'walkpath',
                 'gotoloc',
                 'printloop',
+                'handlecombat',
                ]
 
 # Get a list of available functions
 # This is used for printing available functions
-#  and confirming that valid function is selected (when changed)
+#  and confirming that a valid function is selected (when changed)
 availfuncs = []
 # Go through the dir() of the ShadowThread object
 for func in dir(thread):
@@ -62,7 +63,7 @@ for func in dir(thread):
     availfuncs.append(func)
 
 # The previous recipient of a private message from this bot
-# Used to ease sending repeated manual messages to the bot
+# Used to ease sending repeated manual messages to some nick
 lastrecipient = ''
 
 def botmenu():
@@ -149,8 +150,10 @@ def mainmenu():
       print('')
       print('Quit')
       print('1) Allow thread to finish its current task and normally exit')
+      print('   (this properly closes the sockets and whatnot')
       print('2) Immediately abort thread and quit')
-      print('(anything else to cancel)')
+      print('')
+      print(' (anything else to cancel)')
       response = input('Enter your selection: ')
       if response == '1':
         thread.doloop = None

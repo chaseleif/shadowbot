@@ -7,7 +7,7 @@
 #  Author: Chase LP
 ###
 
-from time import sleep
+import time
 import re, socket, selectors
 
 ''' class IRCHandler
@@ -40,11 +40,10 @@ class IRCHandler():
   def __init__(self, server, port, botnick, botpass):
     # Get our tcp socket
     self.irc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # Make the socket non-blocking
-    #  don't think this is necessary since we are using selector (?)
-    #self.irc.setblocking(False)
     # Connect the socket
     self.connect(server, port, botnick, botpass)
+    # Make the socket non-blocking
+    self.irc.setblocking(False)
     # Initialize the polling object
     self.poller = selectors.DefaultSelector()
     self.poller.register(self.irc, selectors.EVENT_READ)
@@ -78,6 +77,8 @@ class IRCHandler():
       msg         - string to send, should not end with a newline
   '''
   def send(self, msg):
+    # Give small delays, it helps to keep things from breaking !!!
+    time.sleep(2)
     print('  IRC, sending: \"'+msg+'\"')
     self.irc.sendall(bytes(msg + '\n', 'UTF-8'))
 
@@ -143,19 +144,27 @@ class IRCHandler():
     # We have a remainder but no lines in the list, clear the remainder
     elif self.remainder == '1':
       self.remainder = ''
+    # convert the list into a single string
+    resp = '\n'.join(resp)
+    # if the return string is empty just return it
+    if len(resp)==0:
+      return resp
     # The flag for printing incoming irc messages is set, print the message
     if self.printinmsg:
-      print('\n'+'\n'.join(resp))
-    # remove special garbage characters
+      print('\n' + resp)
+
+    # remove garbage special characters which mess with message parsing
     # \002: 02: START OF TEXT
     # \003: 03: END OF TEXT
     # \012: 10: LINE FEED
     # \015: 13: CARRIAGE RETURN
-    ret = re.sub('[\002\003\012\015]','','\n'.join(resp))
-    # \245: 165: upper Spanish enya (N with tilda), replace with N
-    ret = re.sub('[\245]','N',ret)
-    # \260: 176: a colored block, replace with space
-    ret = re.sub('[\260]',' ',ret)
+    # \260: 176: a colored block
+    ret = re.sub('[\002\003\012\015\260]',' ',resp)
+    # combine any continuous whitespace into a single space
+    ret = re.sub('\s+\s',' ',ret)
+    # \245: 165: the uppercase enya (N tilda), this is seen with the yen symbol, replace with '$'
+    ret = re.sub('[\245]','$',ret)
+
     # Check for other extra chars not yet caught
     extras = {}
     for c in ret:
