@@ -31,6 +31,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
     irc           - reference to an IRCHandler class, wraps the irc connection
     lambbot       - string, the nick of the Shadow Lamb bot we will talk to
     meetsay       - None or a string, what we will say upon "You meet ..." messages
+    invstop       - The stop position for considering items to sell / push to bank
 
     Internal Methods
     islambmsg     - Returns bool indicating whether a message is from the Lamb bot
@@ -41,6 +42,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
     walkpath      - Issues "goto" commands for all locations within a list to walk a path
     gotoloc       - Travels to a destination location
     printloop     - The thread function, calls method specified by doloop
+    invflush      - This method flushes inventory up to a point
 
     Doloop Methods
     getbacon      - Goes to the OrkHQ, then repeatedly kills FatOrk to get bacon
@@ -52,7 +54,8 @@ class ShadowThread():
   doquit     = False        # A flag to tell the thread to quit
   irc        = None         # A reference to the IRC handler class with the current connection
   lambbot    = ''           # The nick of the Lamb bot we will be talking to
-  meetsay    = 'shadowrun'  # None, or a string we will say when we 'meet' civilians
+  meetsay    = 'invite'     # None, or a string we will say when we 'meet' civilians
+  invstop    = 0            # Inventory stop position for selling and getting rid of inventory
 
   ''' init
       Assign the lambbot, the irc socket class, and start the thread
@@ -96,7 +99,7 @@ class ShadowThread():
     return msg
 
   ''' awaitresponse
-      Returns the string containing the quitmsg parameter once received
+      Returns a list beginning with the line containing the quitmsg parameter once received
 
       Parameters
       quitmsg     - string, this is the string we are waiting to receive
@@ -114,7 +117,7 @@ class ShadowThread():
         # If the ETA becomes too negative then there may be some issue
         if eta-time.time() < -60:
           print('We are a minute past the ETA ... returning from awaitresponse ... !!!')
-          return ''
+          return ['']
         # print the ETA
         print('About '+str(int(eta-time.time()))+'s remaining')
       # Get text from irc, set the timeout to 2 minutes
@@ -129,7 +132,7 @@ class ShadowThread():
         line = self.getlambmsg(response[i])
         # We have seen our quit msg, return the line
         if quitmsg in line:
-          return '\n'.join(response[i:])
+          return response[i:]
         # We meet a citizen or another player
         # This will occur when we are walking within cities
         elif 'You meet ' in line:
@@ -159,6 +162,13 @@ class ShadowThread():
           pass
         # Yes, we are going somewhere . . .
         elif 'You are going to' in line:
+          pass
+        # Someone has cast a spell
+        elif 'casts a level' in line:
+          pass
+        # This is the response from #status
+        # male darkelve L59(101). HP :58.5/72.6, MP :135.38/135.38, Atk :132.2, Def :9.2, Dmg :15.6-37.2, Arm (M/F):2.5/1.9, XP :25.87, Karma :18, $ :17340.23, Weight :48.16kg/42.62kg
+        elif 'male' in line and 'P ' in line and ' Karma ' in line and ' Weight ' in line:
           pass
         # This is an unhandled message type
         else:
@@ -475,6 +485,45 @@ class ShadowThread():
         # The get_response function has a timeout
         self.irc.get_response(timeout=30)
 
+  ''' invflush
+      If self.invstop is positive, this function {sells,pushes,drops} all items including that number
+      This function should be called outside of travel, etc.
+      An ideal place for this function would be before a loop function exits
+  '''
+  def inventoryflush(self, cmd='#drop'):
+    if self.invstop == 0:
+      return
+    self.irc.privmsg(self.lambbot, '#inventory')
+    numpages = self.getlambmsg(self.awaitresponse('Your Inventory')[0])
+    print('1) numpages = \"' + numpages +'\"')
+    numpages = int(numpages.split(':')[0].split('/')[1])
+    print('2) numpages = \"' + str(numpages) +'\"')
+    haveqty = re.compile('\([\d]+\)')
+    numitems = 0
+    while True:
+      self.irc.privmsg(self.lambbot, '#inventory ' + str(numpages))
+      numpages -= 1
+      numitems = self.getlambmsg(self.awaitresponse('Your Inventory')[0])
+      print('numitems = \"' + numitems + '\"')
+      items = numitems.split(', ')
+      print('items = ' + str(items))
+      numitems = int(items[len(items)-1].split('-')[0])
+      print('numitems = ' + str(numitems))
+      pos = len(items)-1
+      while pos > 0:
+        if numitems < self.invstop:
+          break
+        if haveqty.search(items[pos]):
+          qty = items[pos][haveqty.search(items[pos]).span()[0]:]
+          qty = re.sub('[()]','',qty)
+          self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems) + ' ' + qty)
+        else:
+          self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems))
+        numitems -= 1
+        pos -= 1
+      if numitems < self.invstop:
+        break
+
   ''' getbacon
       This function goes to the OrkHQ_StorageRoom to battle the FatOrk
       There is some chance that the FatOrk will drop a bacon
@@ -533,6 +582,24 @@ class ShadowThread():
           self.irc.privmsg(self.lambbot, '#stop')
           response = self.irc.get_response()
     self.irc.privmsg(self.lambbot, '#explore')
-    # Not sure if this is the right response for all cases.
+    # Not sure if this is the right response if not all locations discovered yet.
     self.awaitresponse('explored')
+    self.irc.privmsg(self.lambbot, '#cast teleport secondhand')
+    self.awaitresponse('now outside of')
+    self.irc.privmsg(self.lambbot, '#enter')
+    self.awaitresponse('You enter the')
+    self.invflush('#sell')
+    self.irc.get_response()
+    self.irc.privmsg(self.lambbot, '#cast teleport bank')
+    self.awaitresponse('now outside of')
+    self.irc.privmsg(self.lambbot, '#enter')
+    self.awaitresponse('In a bank')
+    self.invflush('#push')
+    self.irc.get_response()
+    self.irc.privmsg(self.lambbot, '#cast teleport hotel')
+    self.awaitresponse('now outside of')
+    self.irc.privmsg(self.lambbot, '#enter')
+    self.awaitresponse('#sleep')
+    self.irc.privmsg(self.lambbot, '#sleep')
+    self.awaitresponse('ready to go')
 

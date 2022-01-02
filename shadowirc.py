@@ -2,7 +2,7 @@
 
 ###
 #  shadowirc.py
-#  This is a (mostly) generic irc handler class
+#  This is a pretty generic irc handler class
 ##
 #  Author: Chase LP
 ###
@@ -77,8 +77,6 @@ class IRCHandler():
       msg         - string to send, should not end with a newline
   '''
   def send(self, msg):
-    # Give small delays, it helps to keep things from breaking !!!
-    time.sleep(2)
     if msg.startswith('PONG'):
       print('  IRC, PING PONG PING PONG ! ! !')
     else:
@@ -98,7 +96,10 @@ class IRCHandler():
   ''' privmsg
       Utility function to shorten sending a PRIVMSG to a user/chan
   '''
-  def privmsg(self,recipient,msg):
+  def privmsg(self, recipient, msg, delay=2):
+    # Give small delay for the automated texts
+    if delay > 0:
+      time.sleep(delay)
     self.send('PRIVMSG ' + recipient + ' :' + msg)
 
   ''' get_response
@@ -162,7 +163,8 @@ class IRCHandler():
     # \012: 10: LINE FEED
     # \015: 13: CARRIAGE RETURN
     # \260: 176: a colored block
-    ret = re.sub('[\002\003\012\015\260]',' ',resp)
+    # \264: 180: another box char
+    ret = re.sub('[\002\003\012\015\260\264]',' ',resp)
     # combine any continuous whitespace into a single space
     ret = re.sub('\s+\s',' ',ret)
     # \245: 165: the uppercase enya (N tilda), this is seen with the yen symbol, replace with '$'
