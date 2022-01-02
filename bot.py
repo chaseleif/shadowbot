@@ -259,7 +259,6 @@ class ShadowThread():
             havetarget = None
             for enemy in enemies:
               if 'Drone' in enemies[enemy].name:
-                self.irc.privmsg(self.lambbot, '#attack ' + str(enemy))
                 havetarget = enemy
                 break
             if havetarget is None:
