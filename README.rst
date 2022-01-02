@@ -18,7 +18,7 @@ startbot.py
 | ``username``  
 | ``password``  
 |  
-| The username and password are not kept in memory after use  
+| The password are not kept in memory after use  
 | The rest of the interaction is through the CLI menus provided  
 |  
   
