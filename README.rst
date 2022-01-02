@@ -18,8 +18,8 @@ startbot.py
 | ``username``  
 | ``password``  
 |  
-| The password are not kept in memory after use  
-| The rest of the interaction is through the CLI menus provided  
+| The password is not kept in memory after use  
+| The rest of the interaction is through the CLI menu  
 |  
   
 ========================================================
@@ -29,13 +29,17 @@ bot.py
 | This is the script specific to the ShadowLamb bot  
 | There are various helper functions included within  
 | Additional scripted functions and modifications would go here  
+| User-defined loop functions should accept a counter parameter  
+| *see included functions for example*  
 |  
   
 ========================================================
 irchandler.py  
 ========================================================
   
-| This script provides a class which handles the IRC connection  
+| This script provides a class which handles an IRC connection  
 | It should not be necessary to modify this script  
 | This script is general enough to be used as a base for other IRC scripts  
+| (other than small things such as the connection doesn't return before ident)  
+|  
 |  
