@@ -14,7 +14,7 @@ startbot.py
 | This script *requires* to load a password file,  
 | the login credentials for your bot should be in a file ``pass``  
 |  
-| ``cat pass``  
+| ``$ cat pass``  
 | ``username``  
 | ``password``  
 |  
