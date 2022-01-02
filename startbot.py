@@ -8,7 +8,7 @@
 ###
 
 import time
-from shadowirc import IRCHandler
+from irchandler import IRCHandler
 from bot import ShadowThread
 
 # The ShadowThread object we will interact with

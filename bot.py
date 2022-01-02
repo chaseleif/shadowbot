@@ -490,7 +490,7 @@ class ShadowThread():
       This function should be called outside of travel, etc.
       An ideal place for this function would be before a loop function exits
   '''
-  def inventoryflush(self, cmd='#drop'):
+  def invflush(self, cmd='#drop'):
     if self.invstop == 0:
       return
     self.irc.privmsg(self.lambbot, '#inventory')
