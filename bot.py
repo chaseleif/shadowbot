@@ -72,7 +72,7 @@ class ShadowThread():
   doquit     = False        # A flag to tell the thread to quit
   irc        = None         # A reference to the IRC handler class with the current connection
   lambbot    = ''           # The nick of the Lamb bot we will be talking to
-  meetsay    = 'invite'     # None, or a string we will say when we 'meet' civilians
+  meetsay    = None         # None, or a string we will say when we 'meet' civilians
   invstop    = 0            # Inventory stop position for selling and getting rid of inventory
 
   ''' init
@@ -163,11 +163,11 @@ class ShadowThread():
           # Say bye to them, this will close an interation with a citizen
           self.irc.privmsg(self.lambbot, '#bye')
         # Starting combat
-        elif 'You ENCOUNTER ' in line or 'You are fighting' in line:
+        elif 'You ENCOUNTER ' in line:
           x = i
           while x != len(response) and 'You continue' not in response[x]:
             x += 1
-          # If 'You continue' was in the response
+          # If 'You continue' was in the response after the encounter
           if x < len(response):
             i = x
           else:
@@ -195,11 +195,12 @@ class ShadowThread():
 
   ''' handlecombat
       Combat handler, returns when combat is complete
+      * This currently requires the calm spell for healing *
       Any special combat actions go here
 
       Parameters
       msg         - list, each line a string in the current message buffer
-                    Element zero will contain the line 'You ENCOUNTER' or 'are fighting'
+                    Element zero must contain the line 'You ENCOUNTER' or 'are fighting'
 
       Returns
       msg         - list, each line a string in the current message buffer
@@ -219,8 +220,8 @@ class ShadowThread():
     line = self.getlambmsg(msg[0])
     if 'You ENCOUNTER' in line:
       line = line[14:]
-    else:
-      line = '.'.join(line.split('.')[:-2])
+    else: # 'You are fighting against' in line:
+      line = '.'.join(line.split('.')[:-2])[25:]
     parts = line.split(', ')
 
     enemies = {}
@@ -263,17 +264,22 @@ class ShadowThread():
       line = self.getlambmsg(msg[i])
       if 'You continue' in line:
         break
-      # Combat
-      if 'misses' in line:
+      # ignoring msgs -> misses, loots, casts, moves, uses, loads, gain MP
+      if 'misses' in line or 'received' in line or 'used' in line \
+          or 'casts' in line or 'moves' in line or 'loads' in line \
+          or 'gained' in line:
         pass
+      # Combat
       elif 'attacks' in line:
         if line[re.search('[\d]+-',line).span()[1]:].startswith(self.irc.username):
           # We killed an enemy
           if 'killed them' in line:
             num = int(line.split('attacks ')[1].split('-')[0].strip())
             del(enemies[num])
+            # finished this combat, the top of the outer while will quit
             if len(enemies) == 0:
-              break
+              i += 1
+              continue
             havetarget = None
             for enemy in enemies:
               if 'Drone' in enemies[enemy].name:
@@ -300,7 +306,7 @@ class ShadowThread():
           health = float(numerator)/float(denominator)
           # Less than 30% health
           if health < 0.3:
-            self.irc.privmsg(self.lambbot, '#cast calm')
+            self.irc.privmsg(self.lambbot, '#cast heal')
           # Less than 50% health
           elif health < 0.5:
             if time.time() - castcalmtime > calmcastgap - 15:
@@ -492,7 +498,24 @@ class ShadowThread():
         # While the user has not selected to quit and the function has not changed
         while not self.doquit and func == str(self.doloop):
           # Call the selected function and pass the iteration counter
-          getattr(self,func)(fncounter)
+          starttime = time.time()
+          print(time.asctime())
+          print('Beginning iteration ' + str(fncounter) + ' of ' + func)
+          try:
+            getattr(self,func)(fncounter)
+          except Exception as e:
+            elapsed = int(time.time()-starttime)
+            with open('exceptions','a') as outfile:
+              outfile.write('***\n')
+              outfile.write('Exception in loop function ' + func)
+              outfile.write('Exception: '+str(e)+ '\n')
+              outfile.write('Exception at ' + str(elapsed//60) + ':' + str(elapsed%60) + '\n')
+              outfile.write('***\n')
+            self.doloop = None
+          elapsed = int(time.time()-starttime)
+          print(time.asctime())
+          print('Finished iteration ' + str(fncounter) + ' of ' + func)
+          print('  in ' + str(elapsed//60) + ':' + str(elapsed%60))
           # Increase the iteration counter
           fncounter+=1
           # Short sleep
@@ -524,7 +547,11 @@ class ShadowThread():
       print('numitems = \"' + numitems + '\"')
       items = numitems.split(', ')
       print('items = ' + str(items))
-      numitems = int(items[len(items)-1].split('-')[0])
+      numitems = items[len(items)-1].split('-')[0].strip()
+      # If there is only one item on this inventory page's list it will be different
+      if numitems.startswith('page'):
+        numitems = numitems.split(': ')[1]
+      numitems = int(numitems)
       print('numitems = ' + str(numitems))
       pos = len(items)-1
       while pos > 0:
@@ -536,6 +563,8 @@ class ShadowThread():
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems) + ' ' + qty)
         else:
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems))
+        # including a get_response to slow messages
+        self.irc.get_response()
         numitems -= 1
         pos -= 1
       if numitems < self.invstop:
@@ -571,6 +600,7 @@ class ShadowThread():
 
   ''' explore
       This function simply explores the players current city in a loop.
+      This uses the teleport spell to shed inventory
       This can be used to grind for xp
        to search for citizens to #say things to
         find locations
@@ -605,18 +635,24 @@ class ShadowThread():
     self.awaitresponse('now outside of')
     self.irc.privmsg(self.lambbot, '#enter')
     self.awaitresponse('You enter the')
-    self.invflush('#sell')
-    self.irc.get_response()
-    self.irc.privmsg(self.lambbot, '#cast teleport bank')
-    self.awaitresponse('now outside of')
-    self.irc.privmsg(self.lambbot, '#enter')
-    self.awaitresponse('In a bank')
-    self.invflush('#push')
+    try:
+      self.invflush('#sell')
+      self.irc.get_response()
+      self.irc.privmsg(self.lambbot, '#cast teleport bank')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('In a bank')
+      self.invflush('#push')
+    except Exception as e:
+      with open('exceptions','a') as outfile:
+        outfile.write('***\n')
+        outfile.write('Exception in explore\'s invflush section: '+str(e)+ '\n')
+        outfile.write('***\n')
     self.irc.get_response()
     self.irc.privmsg(self.lambbot, '#cast teleport hotel')
     self.awaitresponse('now outside of')
     self.irc.privmsg(self.lambbot, '#enter')
-    self.awaitresponse('#sleep')
+    self.awaitresponse('You enter')
     self.irc.privmsg(self.lambbot, '#sleep')
     self.awaitresponse('ready to go')
 

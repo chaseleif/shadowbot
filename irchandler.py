@@ -178,19 +178,27 @@ class IRCHandler():
     # remove garbage special characters which mess with message parsing
     # \002: 02: START OF TEXT
     # \003: 03: END OF TEXT
-    # \012: 10: LINE FEED
-    # \015: 13: CARRIAGE RETURN
-    # \260: 176: a colored block
-    # \264: 180: another box char
-    ret = re.sub('[\002\003\012\015\260\264]',' ',resp)
-    # combine any continuous whitespace into a single space
-    ret = re.sub('\s+\s',' ',ret)
-    # \245: 165: the uppercase enya (N tilda), this is seen with the yen symbol, replace with '$'
+    # \260: 176: a degree symbol (?)
+    ret = re.sub('[\002\003\260\264]',' ',resp)
+    # \264: 180: an apostrophe
+    ret = re.sub('[\264]','\'',ret)
+    # \012: 10: '\n'
+    # \015: 13: '\r'
+    # turn carriage returns into newlines
+    ret = re.sub('\r','\n',ret)
+    # condense any span of newlines into a single
+    ret = re.sub('[\n]+','\n',ret)
+    # turn any tabs into spaces
+    ret = re.sub('\t',' ',ret)
+    # combine any lengths of spaces into a single space
+    ret = re.sub('[ ]+',' ',ret)
+    # \245: 165: This is seen with the money symbol, replace with '$'
     ret = re.sub('[\245]','$',ret)
 
     # Check for other extra chars not yet caught
     extras = {}
     for c in ret:
+      if c == '\n': continue
       if ord(c) < 32 or ord(c) > 126:
         extras[ord(c)] = 1
     # I think I may have gotten them all though
