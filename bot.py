@@ -76,13 +76,15 @@ class ShadowThread():
   lambbot    = ''           # The nick of the Lamb bot we will be talking to
   meetsay    = None         # None, or a string we will say when we 'meet' civilians
   invstop    = 0            # Inventory stop position for selling and getting rid of inventory
+  lambmsg    = None         # a compiled re to test for / retrieve lamb messages
 
   ''' init
       Assign the lambbot, the irc socket class, and start the thread
   '''
   def __init__(self, irc, lambbot='Lamb3'):
-    self.lambbot = lambbot
     self.irc = irc
+    self.lambbot = lambbot
+    self.lambmsg = re.compile('[:]?'+self.lambbot+'[\S]* PRIVMSG '+self.irc.username+' :')
     self.th = threading.Thread(target=self.printloop, daemon=True)
     self.th.start()
 
@@ -101,7 +103,7 @@ class ShadowThread():
       msg         - string, the full message line
   '''
   def islambmsg(self, msg):
-    if re.compile('[:]?'+self.lambbot+'[\S]* PRIVMSG '+self.irc.username+' :').match(msg) is None:
+    if self.lambmsg.match(msg) is None:
       return False
     return True
 
@@ -113,7 +115,7 @@ class ShadowThread():
                     * This should be a valid message from the Lamb bot
   '''
   def getlambmsg(self, msg):
-    msg = msg[re.compile('[:]?'+self.lambbot+'[\S]* PRIVMSG '+self.irc.username+' :').match(msg).span()[1]:].strip()
+    msg = msg[self.lambmsg.match(msg).span()[1]:].strip()
     if msg[-1] == '.':
       msg = msg[:-1]
     return msg
@@ -270,7 +272,7 @@ class ShadowThread():
           havetarget = enemy
 
     # shouldn't be . . .
-    if havetarget is not None:
+    if havetarget is not None and len(enemies) > 1:
       print('Target is '+str(havetarget))
       self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
 
@@ -306,19 +308,20 @@ class ShadowThread():
             if len(enemies) == 0:
               i += 1
               continue
-            havetarget = None
-            for enemy in enemies:
-              if 'Drone' in enemies[enemy].name:
-                havetarget = enemy
-                break
-            if havetarget is None:
-              lowlevel = 9999
+            if len(enemies) > 1:
+              havetarget = None
               for enemy in enemies:
-                if enemies[enemy].level < lowlevel:
-                  lowlevel = enemies[enemy].level
+                if 'Drone' in enemies[enemy].name:
                   havetarget = enemy
-            if havetarget is not None:
-              self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
+                  break
+              if havetarget is None:
+                lowlevel = 9999
+                for enemy in enemies:
+                  if enemies[enemy].level < lowlevel:
+                    lowlevel = enemies[enemy].level
+                    havetarget = enemy
+              if havetarget is not None:
+                self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
         # Enemy attacked
         else:
           # uh oh
