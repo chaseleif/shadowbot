@@ -33,9 +33,11 @@ entermsg = {'Redmond':'You arrive at Redmond',
             ################ The OrkHQ, for getting bacon
             'Redmond_OrkHQ':'You enter the ork headquarters',
             'OrkHQ_StorageRoom':'You continue inside OrkHQ_StorageRoom',
-            # Confirm exit messages are the same for other dungeons
+            # Confirmed exit messages the same for:
+            # Redmond_OrkHQ, Redmond_Hideout, Seattle_Renraku,
+            # Seattle_Forest, Seattle_Harbor, Delaware_Nysoft,
+            # Delaware_Prison
             'Exit':'You can return to this location',
-            #'You can use this location to ', <- ???
             # '#travel 1' moves to the right, 2 to left, (unless in redmond)
             # Chicago <-> Delaware <-> Seattle <-> Redmond
             'Subway':'You enter the Subway',
@@ -116,6 +118,24 @@ class ShadowThread():
       msg = msg[:-1]
     return msg
 
+  ''' sleepreceive
+      A receptive sleep, where we continue to accept PING messages
+      Will likely 'sleep' for a slightly longer than requested
+
+      Parameters
+      duration    - integer, time to 'sleep' for
+  '''
+  def sleepreceive(self, duration=30):
+    print('sleepreceive')
+    while duration > 0:
+      print('About ' + str(duration) + 's remaining')
+      starttime = time.time()
+      if duration < 30:
+        self.irc.get_response()
+      else:
+        self.irc.get_response(timeout=duration)
+      duration -= int(time.time() - starttime)
+
   ''' awaitresponse
       Returns a list beginning with the line containing the quitmsg parameter once received
 
@@ -159,7 +179,7 @@ class ShadowThread():
             # Say the message and get their reply
             self.irc.privmsg(self.lambbot, '#say ' + self.meetsay)
             # Give a moment of time for a response . . .
-            time.sleep(15)
+            self.sleepreceive()
           # Say bye to them, this will close an interation with a citizen
           self.irc.privmsg(self.lambbot, '#bye')
         # Starting combat
@@ -243,6 +263,11 @@ class ShadowThread():
         if enemies[enemy].level < lowlevel:
           lowlevel = enemies[enemy].level
           havetarget = enemy
+        # More 'negative' distance enemies are farther away
+        # *Could track our distance for future selections*
+        elif enemies[enemy].level == lowlevel \
+          and enemies[enemy].distance > enemies[havetarget].distance:
+          havetarget = enemy
 
     # shouldn't be . . .
     if havetarget is not None:
@@ -265,9 +290,10 @@ class ShadowThread():
       if 'You continue' in line:
         break
       # ignoring msgs -> misses, loots, casts, moves, uses, loads, gain MP
-      if 'misses' in line or 'received' in line or 'used' in line \
+      # ('caused damage' contains 'used')
+      if 'misses' in line or 'received' in line or 'gained' in line \
           or 'casts' in line or 'moves' in line or 'loads' in line \
-          or 'gained' in line:
+          or ' used ' in line:
         pass
       # Combat
       elif 'attacks' in line:
@@ -298,7 +324,7 @@ class ShadowThread():
           # uh oh
           if 'killed' in line:
             self.doloop = None
-            return msg[i+1:]
+            return msg[i:]
           # "68.7/72.6"
           health = line.split(', ')[1].split('HP')[0]
           numerator = health.split('/')[0]
@@ -319,7 +345,7 @@ class ShadowThread():
               calmcasttime = time.time()
       i += 1
     # return any remaining text (as a list of lines) after combat
-    return msg[i+1:]
+    return msg[i:]
 
   ''' cityrank
       Returns an ordering, this is used to determine direction of subway travel
@@ -343,7 +369,7 @@ class ShadowThread():
     print('  Entering walkpath, path = '+str(path))
     # For each waypoint in the list of waypoints
     for point in path:
-      print('  Point = '+point)
+      print('  Point = ' + point)
       # goto the waypoint
       self.irc.privmsg(self.lambbot, '#goto ' + point)
       # await the entrance message for this waypoint
@@ -374,23 +400,28 @@ class ShadowThread():
     while currloc == '':
       # Find out where we are at
       self.irc.privmsg(self.lambbot, '#party')
-      resp = self.irc.get_response()
+      resp = self.irc.get_response().split('\n')
       # You are {inside,outside,fighting,exploring,going}
       # leave whatever location we are in, or enter if it is right
       i = 0
-      resp = resp.split('\n')
       while True:
         if i == len(resp): break
-        if not self.islambmsg(resp[i]): continue
+        if not self.islambmsg(resp[i]):
+          i += 1
+          continue
         line = self.getlambmsg(resp[i])
         print('The line = \"'+line+'\"')
         # We are inside or outside of a location
         if line.startswith('You are inside') or line.startswith('You are outside'):
+          if 'inside' not in line:
+            self.irc.privmsg(self.lambbot, '#enter')
+            self.irc.get_response()
           # If this location is the destination then return
           if location in line:
             return
           # The location is the last word in the line
           currloc = line.split(' ')[-1]
+          break
         # We are in combat
         elif line.startswith('You are fighting'):
           onsubway = False
@@ -418,16 +449,17 @@ class ShadowThread():
               if ' ' in line:
                 line = line.split(' ')[1]
               secs = int(line)
-            secs += 15
+            timeremaining = mins*60 + secs + 10
             print('  It was detected that we are likely in a subway')
-            print('  sleeping for ' + str(mins*60+secs) + 's')
-            # Sleep for the remaining time before continuing
-            time.sleep(mins*60+secs)
+            print('  (sleeping for >= ' + str(timeremaining) + 's)')
+            self.sleepreceive(timeremaining)
           else:
             # Stop travelling
             self.irc.privmsg(self.lambbot, '#stop')
+            self.irc.get_response()
             # set the onsubway flag in case we don't stop
             onsubway = True
+          break
         i += 1
     # The city precedes the '_' in the locations
     dstcity = location.split('_')[0]
@@ -440,8 +472,7 @@ class ShadowThread():
     if 'Subway' not in currloc:
       # We aren't at the subway, walk to the subway
       self.walkpath(['Subway'])
-    # We are now at the subway in a different city, ensure we are inside
-    self.irc.privmsg(self.lambbot, '#enter')
+    # We are now at the subway in a different city
     # For subway direction: Chicago <-> Delaware <-> Seattle <-> Redmond
     if srccity == 'Redmond' or self.cityrank(srccity) > self.cityrank(dstcity):
       self.irc.privmsg(self.lambbot, '#travel 1')
@@ -449,29 +480,21 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#travel 2')
     # The optional 'eta' parameter to the await response function
     #  will occasionally print an approximate time remaining
+    etamsg = self.getlambmsg(self.awaitresponse('ETA: ')[0])
     eta = 0
-    # The initial response received may not have the ETA
-    while eta == 0:
-      response = self.irc.get_response()
-      # We can calculate our travel time
-      if 'ETA: ' in response:
-        for line in response.split('\n'):
-          if 'ETA' not in line: continue
-          if not self.islambmsg(line): continue
-          line = self.getlambmsg(line)
-          print('ETA line = \"' + line + '\"')
-          timeremaining = response[response.find('ETA: ')+5:]
-          # We will always have minutes
-          parts = timeremaining.split('m')
-          mins = int(parts[0])
-          secs = 0
-          # We also have seconds
-          if len(parts) > 1 and 's' in parts[1]:
-            parts = parts[1].split('s')
-            if parts[0][0] == ' ':
-              secs = int(parts[0][1:])
-          # Set the ETA as future from the current time
-          eta = int(time.time() + mins * 60 + secs)
+    # We can calculate our travel time
+    etamsg = etamsg[etamsg.find('ETA: ')+5:]
+    # We will always have minutes
+    parts = etamsg.split('m')
+    mins = int(parts[0])
+    secs = 0
+    # We also have seconds
+    if len(parts) > 1 and 's' in parts[1]:
+      parts = parts[1].split('s')
+      if parts[0][0] == ' ':
+        secs = int(parts[0][1:])
+    # Set the ETA as future from the current time
+    eta = int(time.time() + mins * 60 + secs)
     # Await the response that we have arrived in the next city
     self.awaitresponse('You arrive',eta=eta)
     # Recursive call to continue travelling to the destination
@@ -507,8 +530,8 @@ class ShadowThread():
             elapsed = int(time.time()-starttime)
             with open('exceptions','a') as outfile:
               outfile.write('***\n')
-              outfile.write('Exception in loop function ' + func)
-              outfile.write('Exception: '+str(e)+ '\n')
+              outfile.write('Exception in loop function ' + func + '\n')
+              outfile.write('Exception: ' + str(e) + '\n')
               outfile.write('Exception at ' + str(elapsed//60) + ':' + str(elapsed%60) + '\n')
               outfile.write('***\n')
             self.doloop = None
@@ -625,17 +648,17 @@ class ShadowThread():
               stopped = True
               break
         if not stopped:
-          time.sleep(20)
+          self.sleepreceive()
           self.irc.privmsg(self.lambbot, '#stop')
           response = self.irc.get_response()
     self.irc.privmsg(self.lambbot, '#explore')
     # Not sure if this is the right response if not all locations discovered yet.
     self.awaitresponse('explored')
-    self.irc.privmsg(self.lambbot, '#cast teleport secondhand')
-    self.awaitresponse('now outside of')
-    self.irc.privmsg(self.lambbot, '#enter')
-    self.awaitresponse('You enter the')
-    try:
+    if self.invstop > 0:
+      self.irc.privmsg(self.lambbot, '#cast teleport secondhand')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('You enter the')
       self.invflush('#sell')
       self.irc.get_response()
       self.irc.privmsg(self.lambbot, '#cast teleport bank')
@@ -643,12 +666,7 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#enter')
       self.awaitresponse('In a bank')
       self.invflush('#push')
-    except Exception as e:
-      with open('exceptions','a') as outfile:
-        outfile.write('***\n')
-        outfile.write('Exception in explore\'s invflush section: '+str(e)+ '\n')
-        outfile.write('***\n')
-    self.irc.get_response()
+      self.irc.get_response()
     self.irc.privmsg(self.lambbot, '#cast teleport hotel')
     self.awaitresponse('now outside of')
     self.irc.privmsg(self.lambbot, '#enter')

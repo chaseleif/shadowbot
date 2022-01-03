@@ -53,6 +53,7 @@ with open('pass') as infile:
 # These methods should not be called in the printloop method
 unavailfuncs = ['islambmsg',
                 'getlambmsg',
+                'sleepreceive',
                 'awaitresponse',
                 'cityrank',
                 'walkpath',

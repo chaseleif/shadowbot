@@ -178,9 +178,9 @@ class IRCHandler():
     # remove garbage special characters which mess with message parsing
     # \002: 02: START OF TEXT
     # \003: 03: END OF TEXT
-    # \260: 176: a degree symbol (?)
-    ret = re.sub('[\002\003\260\264]',' ',resp)
-    # \264: 180: an apostrophe
+    # \260: 176: also meant to be apostrophe (?) # Your party s xp:
+    ret = re.sub('[\002\003\260]',' ',resp)
+    # \264: 180: meant to be an apostrophe (I think)
     ret = re.sub('[\264]','\'',ret)
     # \012: 10: '\n'
     # \015: 13: '\r'
