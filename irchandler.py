@@ -66,12 +66,12 @@ class IRCHandler():
     self.poller = selectors.DefaultSelector()
     self.poller.register(self.irc, selectors.EVENT_READ)
     # Wait to receive message indicating we are identified with NickServ
-    print('  Waiting for identify for ' + botnick)
+    print('    Waiting for identify for ' + botnick)
     while True:
       resp = self.get_response()
       if 'Last login from: ' in resp:
         break
-    print('  Identified as ' + botnick)
+    print('    Identified as ' + botnick)
     self.username = botnick
 
   ''' del
@@ -81,12 +81,12 @@ class IRCHandler():
     try:
       self.poller.close()
     except Exception as e:
-      print('  IRCHandler exception closing selector: ' + str(e))
+      print('    IRCHandler exception closing selector: ' + str(e))
     try:
       self.irc.shutdown(socket.SHUT_RDWR)
       self.irc.close()
     except Exception as e:
-      print('  IRCHandler exception closing socket: ' + str(e))
+      print('    IRCHandler exception closing socket: ' + str(e))
 
   ''' send
       Utility function to shorten irc sendall messages
@@ -95,21 +95,24 @@ class IRCHandler():
       msg         - string to send, should not end with a newline
   '''
   def send(self, msg):
+    if msg == '': return
     if msg.startswith('PONG'):
-      print('  IRC, PING PONG PING PONG ! ! !')
+      print('    IRC -> PING PONG PING PONG ! ! !')
     else:
-      print('  IRC, sending: \"'+msg+'\"')
+      print('    IRC -> \"'+msg+'\"')
     self.irc.sendall(bytes(msg + '\n', 'UTF-8'))
 
   ''' connect
       Connects to an irc server:port and sends an identify msg to nickserv
   '''
   def connect(self, server, port, botnick, botpass):
-    print('  Connecting to ' + server + ':' + str(port))
+    print('    Connecting to ' + server + ':' + str(port))
     self.irc.connect((server, port))
     self.send('USER ' + botnick + ' ' + botnick + ' ' + botnick + ' :ShadowBot')
     self.send('NICK ' + botnick)
-    self.send('NICKSERV IDENTIFY ' + botnick + ' ' + botpass)
+    # Do the identify message here so we don't echo the pass to console
+    msg = 'NICKSERV IDENTIFY ' + botnick + ' ' + botpass + '\n'
+    self.irc.sendall(bytes(msg, 'UTF-8'))
 
   ''' privmsg
       Utility function to shorten sending a PRIVMSG to a user/chan
@@ -173,27 +176,33 @@ class IRCHandler():
       return resp
     # The flag for printing incoming irc messages is set, print the message
     if self.printinmsg:
-      print('\n' + resp)
+      print(resp)
 
     # remove garbage special characters which mess with message parsing
+
     # \002: 02: START OF TEXT
     # \003: 03: END OF TEXT
-    # \260: 176: also meant to be apostrophe (?) # Your party s xp:
-    ret = re.sub('[\002\003\260]',' ',resp)
-    # \264: 180: meant to be an apostrophe (I think)
+    ret = re.sub('[\002\003]','',resp)
+    # turn any tabs into spaces
+    ret = re.sub('\t',' ',ret)
+    # combine any span of spaces into a single
+    ret = re.sub(' [ ]+',' ',ret)
+
+    # \260: 176: the degree symbol, seen in Libera Chat's MOTD
+    ret = re.sub('[\260]','*',ret)
+
+    # \264: 180: meant to be an apostrophe
     ret = re.sub('[\264]','\'',ret)
+
+    # \245: 165: The yen symbol, replacing with '$'
+    ret = re.sub('[\245]','$',ret)
+
     # \012: 10: '\n'
     # \015: 13: '\r'
     # turn carriage returns into newlines
     ret = re.sub('\r','\n',ret)
     # condense any span of newlines into a single
-    ret = re.sub('[\n]+','\n',ret)
-    # turn any tabs into spaces
-    ret = re.sub('\t',' ',ret)
-    # combine any lengths of spaces into a single space
-    ret = re.sub('[ ]+',' ',ret)
-    # \245: 165: This is seen with the money symbol, replace with '$'
-    ret = re.sub('[\245]','$',ret)
+    ret = re.sub('\n[\n]+','\n',ret)
 
     # Check for other extra chars not yet caught
     extras = {}
@@ -203,9 +212,9 @@ class IRCHandler():
         extras[ord(c)] = 1
     # I think I may have gotten them all though
     if len(extras) > 0:
-      print('   ************************')
-      print('         extras -> '+str(list(extras.keys())))
-      print('   ************************')
+      print('     ************************')
+      print('           extras -> '+str(list(extras.keys())))
+      print('     ************************')
     # Return the message (may be an empty string)
     return ret
 

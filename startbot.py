@@ -41,7 +41,7 @@ with open('pass') as infile:
   userpass = lines[1].strip()
   # Connect to irc with the IRCHandler
   # The IRCHandler object is given to the ShadowThread constructor
-  print('Connecting as user ' + username)
+  print('| Connecting as user ' + username)
   thread = ShadowThread(IRCHandler( server='irc.libera.chat',
                                     port=6667,
                                     botnick=username,
@@ -88,48 +88,57 @@ lastrecipient = ''
 
 def botmenu():
   while True:
-    print('')
-    print('Bot (' + thread.irc.username + ') Configuration:')
-    print('1) Set the Lamb bot nick (' + thread.lambbot + ')')
-    print('2) Set word to say on \'Meet\' events (' + str(thread.meetsay) + ')')
-    print('3) Set the stop value for selling / pushing items to bank')
-    print('4) Change the function loop (' + str(thread.doloop) + ')')
+    print(' ___')
+    print('| Bot (' + thread.irc.username + ') Configuration:')
+    print('| 1) Set the Lamb bot nick (' + thread.lambbot + ')')
+    print('| 2) Set word to say on \'Meet\' events (' + str(thread.meetsay) + ')')
+    print('| 3) Set the stop value for selling / pushing items to bank (' + str(thread.invstop) +')')
+    print('| 4) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
+    print('| 5) Change the function loop (' + str(thread.doloop) + ')')
     if thread.doloop is not None:
-      print('5) Clear current function loop')
-    print('0) Return to the main menu')
-    response = input('Enter your selection: ')
+      print('| 6) Clear current function loop')
+    print('| 0) Return to the main menu')
+    response = input('| Enter your selection: ')
     if response == '1':
-      print('')
-      newnick = input('Enter the Lamb bot\'s nick: ')
+      newnick = input('| Enter the Lamb bot\'s nick: ')
       thread.lambbot = newnick
     elif response == '2':
-      print('')
-      newword = input('Enter what the bot says on meet: ')
+      newword = input('| Enter what the bot says on meet: ')
       thread.meetsay = newword
     elif response == '3':
-      print('')
-      print('Currently the stop value is ' + str(thread.invstop))
-      print('Less than 1 indicates to not shed inventory')
-      print('A positive value indicates the highest number of inventory to sell')
-      newval = input('Enter the inventory stop position: ')
+      print('| Currently the stop value is ' + str(thread.invstop))
+      print('| Less than 1 indicates to not shed inventory')
+      print('| A positive value indicates the highest number of inventory to sell')
+      newval = input('| Enter the inventory stop position: ')
       try:
         newval = int(newval)
         if newval < 0:
           newval = 0
         thread.invstop = newval
       except Exception as e:
-        print('Exception: '+ str(e))
+        print('| Exception: ' + str(e))
     elif response == '4':
-      print('')
-      print('Bot function is ' + str(thread.doloop))
-      print('Available functions are ' + ', '.join(availfuncs))
-      newfunc = input('Enter a function name: ')
+      print(' ___')
+      print('| Currently need to kill ' + str(thread.bumsleft) + ' more bum',end='')
+      if thread.bumsleft != 1: print('s',end='')
+      newval = input('\n| Enter the number of bums to kill: ')
+      try:
+        newval = int(newval)
+        if newval < 0:
+          newval = 0
+        thread.bumsleft = newval
+      except Exception as e:
+        print('| Exception: ' + str(e))
+    elif response == '5':
+      print(' ___')
+      print('| Bot function is ' + str(thread.doloop))
+      print('| Available functions are ' + ', '.join(availfuncs))
+      newfunc = input('| Enter a function name: ')
       if newfunc in availfuncs:
         thread.doloop = newfunc
       else:
-        print('')
-        print('Invalid function name')
-    elif response == '5' and thread.doloop is not None:
+        print('| Invalid function name')
+    elif response == '6' and thread.doloop is not None:
       thread.doloop = None
     elif response == '0':
       break
@@ -139,33 +148,29 @@ def botmenu():
 def ircmenu():
   global lastrecipient
   while True:
-    print('')
-    print('IRC Commands:')
-    print('1) Join a channel')
-    print('2) Send a message to a nick or channel')
-    print('3) Send a message to ' + thread.lambbot)
+    print(' ___')
+    print('| IRC Commands:')
+    print('| 1) Join a channel')
+    print('| 2) Send a message to a nick or channel')
+    print('| 3) Send a message to ' + thread.lambbot)
     if lastrecipient != '':
-      print('4) Send a message to ' + lastrecipient)
-    print('0) Return to the main menu')
-    response = input('Enter your selection: ')
+      print('| 4) Send a message to ' + lastrecipient)
+    print('| 0) Return to the main menu')
+    response = input('| Enter your selection: ')
     if response == '1':
-      print('')
-      chan = input('Enter the channel name to join: ')
+      chan = input('| Enter the channel name to join: ')
       thread.irc.joinchan(chan)
     elif response == '2':
-      print('')
-      recipient = input('Enter the recipient: ')
+      recipient = input('| Enter the recipient: ')
       if recipient != thread.lambbot:
         lastrecipient = recipient
-      msg = input('Enter the message: ')
+      msg = input('| Enter the message: ')
       thread.irc.privmsg(recipient, msg, delay=0)
     elif response == '3':
-      print('')
-      msg = input('Enter the message: ')
+      msg = input('| Enter the message: ')
       thread.irc.privmsg(thread.lambbot, msg, delay=0)
     elif response == '4' and lastrecipient != '':
-      print('')
-      msg = input('Enter the message: ')
+      msg = input('| Enter the message: ')
       thread.irc.privmsg(lastrecipient, msg, delay=0)
     elif response == '0':
       break
@@ -174,48 +179,46 @@ def ircmenu():
 
 def mainmenu():
   while True:
-    print('')
-    print('Main Menu:')
-    print('1) Bot configuration')
-    print('2) IRC commands')
-    print('3) Quit')
-    print('4) Hide menu')
-    response = input('Enter your selection: ')
+    print(' ___')
+    print('| Main Menu:')
+    print('| 1) Bot configuration')
+    print('| 2) IRC commands')
+    print('| 3) Quit')
+    print('| 4) Hide menu')
+    response = input('| Enter your selection: ')
     if response == '1':
       botmenu()
     elif response == '2':
       ircmenu()
     elif response == '3':
-      print('')
-      print('Quit')
-      print('1) Allow thread to finish its current task and normally exit')
-      print('   (this properly closes the sockets and whatnot)')
-      print('2) Immediately abort thread and quit')
-      print('')
-      print(' (anything else to cancel)')
-      response = input('Enter your selection: ')
+      print(' ___')
+      print('| Quit')
+      print('| 1) Allow thread to finish its current activity before exit')
+      print('| 2) More immediately abort thread and quit')
+      print('| (anything else to cancel)')
+      response = input('| Enter your selection: ')
       if response == '1':
-        thread.doloop = None
         thread.doquit = True
-        print('Sending quit, joining thread . . .')
+        print('| Sending quit, joining thread . . .')
         thread.th.join()
-        print('Goodbye')
+        print('| Goodbye')
         break
-      if response == '2':
+      if response == '2' and thread.doloop is not None:
         thread.doloop = None
         thread.doquit = True
-        time.sleep(2)
-        print('Goodbye')
+        #time.sleep(2)
+        thread.th.join()
+        print('| Goodbye')
         break
     elif response == '4':
-      print('')
-      input('Hiding menu until the enter key is pressed . . .\n')
+      print(' ___')
+      input('| Hiding menu until the enter key is pressed . . .\n')
     else:
       time.sleep(1)
 
-print('\nshadowbot  Copyright (C) 2022  Chase Phelps\n' + \
-      'This program comes with ABSOLUTELY NO WARRANTY.\n' + \
-      'This is free software, and you are welcome to redistribute it under certain conditions\n')
+print('\n _____\n| shadowbot  Copyright (C) 2022  Chase Phelps\n' + \
+      '| This program comes with ABSOLUTELY NO WARRANTY.\n' + \
+      '| This is free software, and you are welcome to redistribute it under certain conditions\n _____')
 
 # Begin the driver loop
 mainmenu()

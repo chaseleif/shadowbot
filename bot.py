@@ -52,16 +52,17 @@ entermsg = {'Redmond':'You arrive at Redmond',
     lambbot       - string, the nick of the Shadow Lamb bot we will talk to
     meetsay       - None or a string, what we will say upon "You meet ..." messages
     invstop       - The stop position for considering items to sell / push to bank
+    lambmsg       - An re object to test for and get messages from the Lamb bot
+    bumsleft      - A counter of bums needed to kill for the 'Bummer' quest
 
     Internal Methods
-    islambmsg     - Returns bool indicating whether a message is from the Lamb bot
-    getlambmsg    - Returns a string, the stripped message from the Lamb bot
+    getlambmsg    - Returns a string, the stripped message from the Lamb bot (or empty if not a Lamb msg)
     awaitresponse - Awaits a specific response from the Lamb bot, returns the string response
     handlecombat  - Called when in combat, returns when combat is over
     cityrank      - Returns an ordinal value for cities, used for subway travel
     walkpath      - Issues "goto" commands for all locations within a list to walk a path
     gotoloc       - Travels to a destination location
-    printloop     - The thread function, calls method specified by doloop
+    printloop     - The thread function, calls method specified by doloop, loop is quit for exceptions
     invflush      - This method flushes inventory up to a point
 
     Doloop Methods
@@ -77,6 +78,7 @@ class ShadowThread():
   meetsay    = None         # None, or a string we will say when we 'meet' civilians
   invstop    = 0            # Inventory stop position for selling and getting rid of inventory
   lambmsg    = None         # a compiled re to test for / retrieve lamb messages
+  bumsleft   = 0            # Number of bums left to kill
 
   ''' init
       Assign the lambbot, the irc socket class, and start the thread
@@ -96,25 +98,17 @@ class ShadowThread():
     self.func = None
     self.th.join()
 
-  ''' islambmsg
-      Returns True if the line matches the format of a PRIVMSG from the Lamb bot
-
-      Parameters
-      msg         - string, the full message line
-  '''
-  def islambmsg(self, msg):
-    if self.lambmsg.match(msg) is None:
-      return False
-    return True
-
   ''' getlambmsg
       Returns the text content of the message from the Lamb bot
+      Returns an empty string if the msg is not from the Lamb bot
 
       Parameters
       msg         - string, the full message line
                     * This should be a valid message from the Lamb bot
   '''
   def getlambmsg(self, msg):
+    if self.lambmsg.match(msg) is None:
+      return ''
     msg = msg[self.lambmsg.match(msg).span()[1]:].strip()
     if msg[-1] == '.':
       msg = msg[:-1]
@@ -128,9 +122,12 @@ class ShadowThread():
       duration    - integer, time to 'sleep' for
   '''
   def sleepreceive(self, duration=30):
-    print('sleepreceive')
+    print(' ~ sleepreceive')
     while duration > 0:
-      print('About ' + str(duration) + 's remaining')
+      # The user wants to quit, get back to the loop function
+      if self.doquit:
+        raise Exception('Player quit')
+      print(' ~ About ' + str(duration) + 's remaining')
       starttime = time.time()
       if duration < 30:
         self.irc.get_response()
@@ -147,35 +144,60 @@ class ShadowThread():
                      periodic approximate time remaining messages
   '''
   def awaitresponse(self, quitmsg, eta=-1):
-    print('  Awaiting response: '+str(quitmsg))
+    print(' ~ Awaiting response: '+str(quitmsg))
     # Repeat until we see the quitmsg parameter
     while True:
       # If there is an ETA, print an approximate time remaining
       if eta > 0:
-        print(time.asctime())
+        print(' ~ ' + time.asctime())
         # ETA currently used only for subway travel
         # If the ETA becomes too negative then there may be some issue
         if eta-time.time() < -60:
-          print('We are a minute past the ETA ... returning from awaitresponse ... !!!')
+          print(' ~ We are a minute past the ETA ... returning from awaitresponse ... !!!')
           return ['']
         # print the ETA
-        print('About '+str(int(eta-time.time()))+'s remaining')
+        print(' ~ About '+str(int(eta-time.time()))+'s remaining')
       # Get text from irc, set the timeout to 2 minutes
       response = self.irc.get_response(timeout=120)
       response = response.split('\n')
       i = 0
       while True:
+        # The user wants to quit, get back to the loop function
+        if self.doquit:
+          raise Exception('Player quit')
         if i == len(response): break
-        if not self.islambmsg(response[i]):
+        line = self.getlambmsg(response[i])
+        if line == '':
           i += 1
           continue
-        line = self.getlambmsg(response[i])
         # We have seen our quit msg, return the line
         if quitmsg in line:
           return response[i:]
         # We meet a citizen or another player
         # This will occur when we are walking within cities
         elif 'You meet ' in line:
+          # We need to kill more bums
+          # 'You meet 1-Bum[7852502](-7.5m)(L5(6))[H]'
+          # 'You meet 1-Bum[7852511](-7.5m)(L5(6))[H], 2-Bum[7852512](-7.5m)(L5(6))[H]'
+          # I have seen bums walking with other NPCs (Police Officers?)
+          if self.bumsleft > 0 and 'Bum' in line:
+            # Ensure there are only bums and get a count of them
+            parts = line.split(', ')
+            bumcount = 0
+            for part in line.split(', '):
+              if 'Bum' in part:
+                bumcount += 1
+              else:
+                bumcount = self.bumsleft + 1
+                break
+            # Don't kill more bums than needed or other NPC types
+            if bumcount <= self.bumsleft:
+              self.irc.privmsg(self.lambbot, '#fight')
+              response = self.awaitresponse('You ENCOUNTER')
+              response = self.handlecombat(response)
+              i = 0
+              self.bumsleft -= bumcount
+              continue
           # If we have a message set to say
           if self.meetsay is not None:
             # Say the message and get their reply
@@ -186,17 +208,10 @@ class ShadowThread():
           self.irc.privmsg(self.lambbot, '#bye')
         # Starting combat
         elif 'You ENCOUNTER ' in line:
-          x = i
-          while x != len(response) and 'You continue' not in response[x]:
-            x += 1
-          # If 'You continue' was in the response after the encounter
-          if x < len(response):
-            i = x
-          else:
-            # We get a new list from the handle combat function
-            response = self.handlecombat(response[i:])
-            # 'i' will be reset to zero at the bottom of this loop
-            i = -1
+          # We get a new list from the handle combat function
+          response = self.handlecombat(response[i:])
+          # 'i' will be reset to zero at the bottom of this loop
+          i = -1
         # You gained some MP
         elif 'You gained +' in line:
           pass
@@ -212,7 +227,7 @@ class ShadowThread():
           pass
         # This is an unhandled message type
         else:
-          print('  unhandled: \"'+line+'\"')
+          print(' ~ unhandled: \"'+line+'\"')
         i += 1
 
   ''' handlecombat
@@ -254,10 +269,11 @@ class ShadowThread():
       dist = float(part.split('(')[1][:-2])
       lvl = int(part.split('(')[2][1:].split(')')[0])
       enemies[num] = ShadowEnemy(name,dist,lvl)
-      print('Enemy '+str(num)+') '+name+' L'+str(lvl)+' at '+str(dist)+'m')
-      if havetarget is None and 'Drone' in name:
-        # Save the current target as the index of enemies[]
-        havetarget = num
+      print(' ~ Enemy '+str(num)+') '+name+', L'+str(lvl)+', at '+str(dist)+'m')
+      if 'Drone' in name:
+        if havetarget is None or dist > enemies[havetarget].distance:
+          # Save the current target as the index of enemies[]
+          havetarget = num
 
     if havetarget is None:
       lowlevel = 9999
@@ -271,9 +287,9 @@ class ShadowThread():
           and enemies[enemy].distance > enemies[havetarget].distance:
           havetarget = enemy
 
-    # shouldn't be . . .
+    # shouldn't be None
     if havetarget is not None and len(enemies) > 1:
-      print('Target is '+str(havetarget))
+      print(' ~ Target is '+str(havetarget))
       self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
 
     calmcasttime = 0
@@ -285,15 +301,12 @@ class ShadowThread():
         msg = self.irc.get_response(timeout=45).split('\n')
         i = 0
         continue
-      if not self.islambmsg(msg[i]):
-        i += 1
-        continue
       line = self.getlambmsg(msg[i])
       if 'You continue' in line:
         break
       # ignoring msgs -> misses, loots, casts, moves, uses, loads, gain MP
       # ('caused damage' contains 'used')
-      if 'misses' in line or 'received' in line or 'gained' in line \
+      elif 'misses' in line or 'received' in line or 'gained' in line \
           or 'casts' in line or 'moves' in line or 'loads' in line \
           or ' used ' in line:
         pass
@@ -303,6 +316,10 @@ class ShadowThread():
           # We killed an enemy
           if 'killed them' in line:
             num = int(line.split('attacks ')[1].split('-')[0].strip())
+            # If we didn't fill out the enemies dict
+            if num not in enemies:
+              i += 1
+              continue
             del(enemies[num])
             # finished this combat, the top of the outer while will quit
             if len(enemies) == 0:
@@ -326,8 +343,7 @@ class ShadowThread():
         else:
           # uh oh
           if 'killed' in line:
-            self.doloop = None
-            return msg[i:]
+            raise Exception('Player died')
           # "68.7/72.6"
           health = line.split(', ')[1].split('HP')[0]
           numerator = health.split('/')[0]
@@ -369,14 +385,17 @@ class ShadowThread():
       path        - list, a list of strings, each a destination to "goto"
   '''
   def walkpath(self,path):
-    print('  Entering walkpath, path = '+str(path))
+    print(' ~ Entering walkpath, path = '+str(path))
     # For each waypoint in the list of waypoints
     for point in path:
-      print('  Point = ' + point)
+      print(' ~ Point = ' + point)
       # goto the waypoint
       self.irc.privmsg(self.lambbot, '#goto ' + point)
       # await the entrance message for this waypoint
       self.awaitresponse(entermsg[point])
+      # The user wants to quit, get back to the loop function
+      if self.doquit:
+        raise Exception('Player quit')
 
   ''' gotoloc
       Handles getting to some starting point for a message loop.
@@ -388,14 +407,8 @@ class ShadowThread():
 
       Returns       
                     When travel is complete, player is at the destination
-                    If self.doloop becomes None (user has request to quit function)
-                    * any function loops should check if self.doloop is None after this function
   '''
   def gotoloc(self,location):
-    # The user has set the function loop to None, quit going to location
-    # Calling functions must test whether self.doloop is None upon return
-    if self.doloop is None:
-      return
     # No current location
     currloc = ''
     # Limit repeated "#party" messages
@@ -409,14 +422,10 @@ class ShadowThread():
       i = 0
       while True:
         if i == len(resp): break
-        if not self.islambmsg(resp[i]):
-          i += 1
-          continue
         line = self.getlambmsg(resp[i])
-        print('The line = \"'+line+'\"')
         # We are inside or outside of a location
         if line.startswith('You are inside') or line.startswith('You are outside'):
-          if 'inside' not in line:
+          if 'outside' in line:
             self.irc.privmsg(self.lambbot, '#enter')
             self.irc.get_response()
           # If this location is the destination then return
@@ -453,8 +462,8 @@ class ShadowThread():
                 line = line.split(' ')[1]
               secs = int(line)
             timeremaining = mins*60 + secs + 10
-            print('  It was detected that we are likely in a subway')
-            print('  (sleeping for >= ' + str(timeremaining) + 's)')
+            print(' ~ It was detected that we are likely in a subway')
+            print(' ~ (sleeping for >= ' + str(timeremaining) + 's)')
             self.sleepreceive(timeremaining)
           else:
             # Stop travelling
@@ -525,23 +534,38 @@ class ShadowThread():
         while not self.doquit and func == str(self.doloop):
           # Call the selected function and pass the iteration counter
           starttime = time.time()
-          print(time.asctime())
-          print('Beginning iteration ' + str(fncounter) + ' of ' + func)
+          print(' ~  ~~~~~~~~~~')
+          print(' ~ { ' + time.asctime())
+          print(' ~ { Beginning iteration ' + str(fncounter) + ' of ' + func)
+          print(' ~  ~~~~~~~~~~')
           try:
             getattr(self,func)(fncounter)
           except Exception as e:
-            elapsed = int(time.time()-starttime)
-            with open('exceptions','a') as outfile:
-              outfile.write('***\n')
-              outfile.write('Exception in loop function ' + func + '\n')
-              outfile.write('Exception: ' + str(e) + '\n')
-              outfile.write('Exception at ' + str(elapsed//60) + ':' + str(elapsed%60) + '\n')
-              outfile.write('***\n')
             self.doloop = None
+            if str(e) == 'Player quit':
+              print(' ~ Quitting . . .')
+              break
+            if str(e) == 'Player died':
+              print(' ~ The player has died')
+              break
+            elapsed = int(time.time()-starttime)
+            msg = '*****\n'
+            msg += ' ***\n'
+            msg += ' ***  ' + time.asctime() +'\n'
+            msg += ' ***  Exception in loop function ' + func + '\n'
+            msg += ' ***  Exception: ' + str(e) + '\n'
+            msg += ' ***  Exception at ' + str(elapsed//60) + ':' + str(elapsed%60) +'\n'
+            msg += ' ***\n'
+            msg += '*****\n'
+            print(msg, end='')
+            with open('exceptions','a') as outfile:
+              outfile.write(msg)
           elapsed = int(time.time()-starttime)
-          print(time.asctime())
-          print('Finished iteration ' + str(fncounter) + ' of ' + func)
-          print('  in ' + str(elapsed//60) + ':' + str(elapsed%60))
+          print(' ~  ~~~~~~~~~~')
+          print(' ~ { ' + time.asctime())
+          print(' ~ { Finished iteration ' + str(fncounter) + ' of ' + func)
+          print(' ~ {   in ' + str(elapsed//60) + ':' + str(elapsed%60))
+          print(' ~  ~~~~~~~~~~')
           # Increase the iteration counter
           fncounter+=1
           # Short sleep
@@ -561,24 +585,19 @@ class ShadowThread():
       return
     self.irc.privmsg(self.lambbot, '#inventory')
     numpages = self.getlambmsg(self.awaitresponse('Your Inventory')[0])
-    print('1) numpages = \"' + numpages +'\"')
     numpages = int(numpages.split(':')[0].split('/')[1])
-    print('2) numpages = \"' + str(numpages) +'\"')
     haveqty = re.compile('\([\d]+\)')
     numitems = 0
     while True:
       self.irc.privmsg(self.lambbot, '#inventory ' + str(numpages))
       numpages -= 1
       numitems = self.getlambmsg(self.awaitresponse('Your Inventory')[0])
-      print('numitems = \"' + numitems + '\"')
       items = numitems.split(', ')
-      print('items = ' + str(items))
       numitems = items[len(items)-1].split('-')[0].strip()
       # If there is only one item on this inventory page's list it will be different
       if numitems.startswith('page'):
         numitems = numitems.split(': ')[1]
       numitems = int(numitems)
-      print('numitems = ' + str(numitems))
       pos = len(items)-1
       while pos > 0:
         if numitems < self.invstop:
@@ -610,9 +629,6 @@ class ShadowThread():
     # Get to the OrkHQ
     if fncounter < 1:
       self.gotoloc('Redmond_OrkHQ')
-      # Ensure function not cancelled during travel
-      if self.doloop is None:
-        return
     else:
       # We are at the OrkHQ, enter the OrkHQ
       self.irc.privmsg(self.lambbot, '#enter')
@@ -631,29 +647,42 @@ class ShadowThread():
        to search for citizens to #say things to
         find locations
        *This can also be used to test the handlecombat method*
+
+      Need to handle the subway case when fncounter==0
+        'The command is not available for your current'
+      Otherwise, don't call this while on a subway . . .
   '''
   def explore(self, fncounter=0):
     # Ensure we are stopped
     if fncounter < 1:
+      '''
+      Need to improve / perfect a "stop" procedure
+      A stop needs to handle when we are actually in combat,
+        when we are travelling in a subway,
+        etc . . .
+      '''
       self.irc.privmsg(self.lambbot, '#stop')
-      response = self.irc.get_response()
+      response = self.irc.get_response().split('\n')
       stopped = False
       while not stopped:
-        for line in response.split('\n'):
+        for line in response:
           if 'What now?' in line:
             stopped = True
             break
         if not stopped:
           self.irc.privmsg(self.lambbot, '#party')
-          response = self.irc.get_response()
-          for line in response.split('\n'):
-            if 'You are outside' or 'You are inside' in line:
-              stopped = True
-              break
-        if not stopped:
-          self.sleepreceive()
-          self.irc.privmsg(self.lambbot, '#stop')
-          response = self.irc.get_response()
+          response = self.awaitresponse('You are')
+          line = self.getlambmsg(response[0])
+          if 'You are outside' in line or 'You are inside' in line:
+            stopped = True
+          elif 'You are fighting' in line:
+            self.handlecombat(response)
+            self.irc.privmsg(self.lambbot, '#stop')
+            response = self.irc.get_response().split('\n')
+          else:
+            self.sleepreceive()
+            self.irc.privmsg(self.lambbot, '#stop')
+            response = self.irc.get_response().split('\n')
     self.irc.privmsg(self.lambbot, '#explore')
     # Not sure if this is the right response if not all locations discovered yet.
     self.awaitresponse('explored')
