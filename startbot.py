@@ -86,6 +86,35 @@ for func in dir(thread):
 # Used to ease sending repeated manual messages to some nick
 lastrecipient = ''
 
+def botcmdmenu():
+  while True:
+    print(' ___')
+    print('| These commands will be ran before the function loop starts')
+    print('| Ensure these are valid commands, e.g., \"#cast berzerk\"')
+    print('| Current commands: ' +str(thread.precmds))
+    print('| 1) Add a command')
+    if len(thread.precmds) > 0:
+      print('| 2) Remove a command')
+      print('| 3) Clear commands')
+    print('| 0) Return to bot menu')
+    response = input('| Enter your selection: ')
+    if response == '1':
+      newcmd = input('| Enter a new command: ')
+      if newcmd != '':
+        thread.precmds.append(newcmd)
+    elif len(thread.precmds) > 0 and response == '2':
+      delcmd = input('| Enter the command to remove: ')
+      try:
+        thread.precmds.remove(delcmd)
+      except Exception as e:
+        print('| Exception: ' + str(e))
+    elif len(thread.precmds) > 0 and response == '3':
+      thread.precmds = []
+    elif response == '0':
+      break
+    else:
+      time.sleep(1)
+
 def botmenu():
   while True:
     print(' ___')
@@ -95,8 +124,9 @@ def botmenu():
     print('| 3) Set the stop value for selling / pushing items to bank (' + str(thread.invstop) +')')
     print('| 4) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
     print('| 5) Change the function loop (' + str(thread.doloop) + ')')
+    print('| 6) Set command list to run before function loop')
     if thread.doloop is not None:
-      print('| 6) Clear current function loop')
+      print('| 9) Clear current function loop')
     print('| 0) Return to the main menu')
     response = input('| Enter your selection: ')
     if response == '1':
@@ -138,7 +168,9 @@ def botmenu():
         thread.doloop = newfunc
       else:
         print('| Invalid function name')
-    elif response == '6' and thread.doloop is not None:
+    elif response == '6':
+      botcmdmenu()
+    elif response == '9' and thread.doloop is not None:
       thread.doloop = None
     elif response == '0':
       break
@@ -198,12 +230,13 @@ def mainmenu():
       print('| (anything else to cancel)')
       response = input('| Enter your selection: ')
       if response == '1':
-        thread.doquit = True
+        thread.doloop = None
+        thread.softquit = True
         print('| Sending quit, joining thread . . .')
         thread.th.join()
         print('| Goodbye')
         break
-      if response == '2' and thread.doloop is not None:
+      if response == '2':
         thread.doloop = None
         thread.doquit = True
         #time.sleep(2)

@@ -32,6 +32,7 @@ import re, socket, selectors
     Attributes
     irc           - Reference to the irc connection, a socket
     remainder     - String, used to gather only partially received lines
+    readybuff     - List of full lines that have been received
     poller        - A DefaultSelector, used to make reads non-blocking
     username      - The username of the irc connection
     printinmsg    - Boolean, indicates whether to print irc messages
@@ -46,6 +47,7 @@ import re, socket, selectors
 class IRCHandler():
   irc        = None # The tcp socket for the irc connection
   remainder  = ''   # Remainder string, used to return only complete lines
+  readybuff  = []   # A list of full lines that have been received
   poller     = None # Polling object for reading the tcp socket
   username   = ''   # Username of the irc connection
   printinmsg = True # Whether to print incoming irc text
@@ -69,7 +71,7 @@ class IRCHandler():
     print('    Waiting for identify for ' + botnick)
     while True:
       resp = self.get_response()
-      if 'Last login from: ' in resp:
+      if 'Last login from' in resp:
         break
     print('    Identified as ' + botnick)
     self.username = botnick
@@ -118,6 +120,7 @@ class IRCHandler():
       Utility function to shorten sending a PRIVMSG to a user/chan
   '''
   def privmsg(self, recipient, msg, delay=2):
+    if msg == '': return
     # Give small delay for the automated texts
     if delay > 0:
       time.sleep(delay)
@@ -129,15 +132,24 @@ class IRCHandler():
       Parameters
       timeout     - integer, optional, the time to wait before returning
 
-      Returns completely received strings
+      Returns a completely received string
        strings only partially received saved in self.remainder
+       extra strings saved in self.readybuff
   '''
   def get_response(self,timeout=30):
+    if len(self.readybuff) > 0:
+      ret = self.readybuff[0]
+      self.readybuff = self.readybuff[1:]
+      return ret
     # See if we have a read event on the irc socket
     event = self.poller.select(timeout=timeout)
     # There are no read events, return
     if len(event) == 0:
-      return ''
+      ret = ''
+      if len(self.readybuff) > 0:
+        ret = self.readybuff[0]
+        self.readybuff = self.readybuff[1:]
+      return ret
     # Read from the socket
     resp = self.irc.recv(2048).decode('UTF-8')
     # Put any remainder from previous messages at the front
@@ -173,6 +185,9 @@ class IRCHandler():
     resp = '\n'.join(resp)
     # if the return string is empty just return it
     if len(resp)==0:
+      if len(self.readybuff) > 0:
+        resp = self.readybuff[0]
+        self.readybuff = self.readybuff[1:]
       return resp
     # The flag for printing incoming irc messages is set, print the message
     if self.printinmsg:
@@ -215,7 +230,13 @@ class IRCHandler():
       print('     ************************')
       print('           extras -> '+str(list(extras.keys())))
       print('     ************************')
-    # Return the message (may be an empty string)
+    # Append any new lines to the ready buffer
+    self.readybuff += ret.split('\n')
+    # Return whatever we have
+    ret = ''
+    if len(self.readybuff) > 0:
+      ret = self.readybuff[0]
+      self.readybuff = self.readybuff[1:]
     return ret
 
   ''' joinchan
