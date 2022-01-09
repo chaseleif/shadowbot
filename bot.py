@@ -571,19 +571,15 @@ class ShadowThread():
       return
     self.irc.privmsg(self.lambbot, '#inventory')
     numpages = self.getlambmsg(self.awaitresponse('Your Inventory'))
-    print('1) numpages = '+numpages)
     numpages = int(numpages.split(':')[0].split('/')[1])
-    print('2) numpages = '+str(numpages))
     haveqty = re.compile('\([\d]+\)')
     numitems = 0
     while True:
       self.irc.privmsg(self.lambbot, '#inventory ' + str(numpages))
       numpages -= 1
       numitems = self.getlambmsg(self.awaitresponse('Your Inventory'))
-      print('3) numitems='+str(numitems))
       items = numitems.split(', ')
       numitems = items[len(items)-1].split('-')[0].strip()
-      print('4) numitems='+str(numitems))
       # If there is only one item on this inventory page's list it will be different
       if numitems.startswith('page'):
         numitems = numitems.split(': ')[1]

@@ -189,9 +189,6 @@ class IRCHandler():
         resp = self.readybuff[0]
         self.readybuff = self.readybuff[1:]
       return resp
-    # The flag for printing incoming irc messages is set, print the message
-    if self.printinmsg:
-      print(resp)
 
     # remove garbage special characters which mess with message parsing
 
@@ -237,6 +234,11 @@ class IRCHandler():
     if len(self.readybuff) > 0:
       ret = self.readybuff[0]
       self.readybuff = self.readybuff[1:]
+
+    # The flag for printing incoming irc messages is set, print the message
+    if self.printinmsg:
+      print(ret)
+
     return ret
 
   ''' joinchan
