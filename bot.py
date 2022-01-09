@@ -475,7 +475,7 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#travel 2')
     # The optional 'eta' parameter to the await response function
     #  will occasionally print an approximate time remaining
-    etamsg = self.getlambmsg(self.awaitresponse('ETA: ')[0])
+    etamsg = self.getlambmsg(self.awaitresponse('ETA: '))
     eta = 0
     # We can calculate our travel time
     etamsg = etamsg[etamsg.find('ETA: ')+5:]
@@ -570,16 +570,20 @@ class ShadowThread():
     if self.invstop == 0:
       return
     self.irc.privmsg(self.lambbot, '#inventory')
-    numpages = self.getlambmsg(self.awaitresponse('Your Inventory')[0])
+    numpages = self.getlambmsg(self.awaitresponse('Your Inventory'))
+    print('1) numpages = '+numpages)
     numpages = int(numpages.split(':')[0].split('/')[1])
+    print('2) numpages = '+str(numpages))
     haveqty = re.compile('\([\d]+\)')
     numitems = 0
     while True:
       self.irc.privmsg(self.lambbot, '#inventory ' + str(numpages))
       numpages -= 1
-      numitems = self.getlambmsg(self.awaitresponse('Your Inventory')[0])
+      numitems = self.getlambmsg(self.awaitresponse('Your Inventory'))
+      print('3) numitems='+str(numitems))
       items = numitems.split(', ')
       numitems = items[len(items)-1].split('-')[0].strip()
+      print('4) numitems='+str(numitems))
       # If there is only one item on this inventory page's list it will be different
       if numitems.startswith('page'):
         numitems = numitems.split(': ')[1]
