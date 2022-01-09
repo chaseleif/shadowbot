@@ -309,12 +309,10 @@ class ShadowThread():
             num = int(line.split('attacks ')[1].split('-')[0].strip())
             # If we didn't fill out the enemies dict
             if num not in enemies:
-              i += 1
               continue
             del(enemies[num])
             # finished this combat, the top of the outer while will quit
             if len(enemies) == 0:
-              i += 1
               continue
             if len(enemies) > 1:
               havetarget = None
@@ -458,7 +456,6 @@ class ShadowThread():
             # set the onsubway flag in case we don't stop
             onsubway = True
           break
-        i += 1
     # The city precedes the '_' in the locations
     dstcity = location.split('_')[0]
     srccity = currloc.split('_')[0]
