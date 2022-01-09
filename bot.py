@@ -157,7 +157,7 @@ class ShadowThread():
         # If the ETA becomes too negative then there may be some issue
         if eta-time.time() < -60:
           print(' ~ We are a minute past the ETA ... returning from awaitresponse ... !!!')
-          return ['']
+          return ''
         # print the ETA
         print(' ~ About '+str(int(eta-time.time()))+'s remaining')
       # Get text from irc, set the timeout to 2 minutes
@@ -413,7 +413,7 @@ class ShadowThread():
       # leave whatever location we are in, or enter if it is right
       while True:
         resp = self.irc.get_response()
-        line = self.getlambmsg(resp[i])
+        line = self.getlambmsg(resp)
         # We are inside or outside of a location
         if line.startswith('You are inside') or line.startswith('You are outside'):
           if 'outside' in line:
