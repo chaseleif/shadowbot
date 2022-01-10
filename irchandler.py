@@ -140,16 +140,15 @@ class IRCHandler():
     if len(self.readybuff) > 0:
       ret = self.readybuff[0]
       self.readybuff = self.readybuff[1:]
+      # The flag for printing incoming irc messages is set, print the message
+      if self.printinmsg:
+        print(ret)
       return ret
     # See if we have a read event on the irc socket
     event = self.poller.select(timeout=timeout)
     # There are no read events, return
     if len(event) == 0:
-      ret = ''
-      if len(self.readybuff) > 0:
-        ret = self.readybuff[0]
-        self.readybuff = self.readybuff[1:]
-      return ret
+      return ''
     # Read from the socket
     resp = self.irc.recv(2048).decode('UTF-8')
     # Put any remainder from previous messages at the front
@@ -184,11 +183,8 @@ class IRCHandler():
     # convert the list into a single string
     resp = '\n'.join(resp)
     # if the return string is empty just return it
-    if len(resp)==0:
-      if len(self.readybuff) > 0:
-        resp = self.readybuff[0]
-        self.readybuff = self.readybuff[1:]
-      return resp
+    if len(resp) == 0:
+      return ''
 
     # remove garbage special characters which mess with message parsing
 
@@ -227,17 +223,16 @@ class IRCHandler():
       print('     ************************')
       print('           extras -> '+str(list(extras.keys())))
       print('     ************************')
-    # Append any new lines to the ready buffer
-    self.readybuff += ret.split('\n')
+    # Add any new lines to the ready buffer
+    self.readybuff = [s for s in ret.split('\n') if s != '']
     # Return whatever we have
     ret = ''
     if len(self.readybuff) > 0:
       ret = self.readybuff[0]
       self.readybuff = self.readybuff[1:]
-
-    # The flag for printing incoming irc messages is set, print the message
-    if self.printinmsg:
-      print(ret)
+      # The flag for printing incoming irc messages is set, print the message
+      if self.printinmsg:
+        print(ret)
 
     return ret
 

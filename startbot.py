@@ -232,11 +232,12 @@ def mainmenu():
       if response == '1':
         thread.doloop = None
         thread.softquit = True
-        print('| Sending quit, joining thread . . .')
+        print('| Finishing current activity, joining thread . . .')
         thread.th.join()
         print('| Goodbye')
         break
       if response == '2':
+        print('| Aborting current activity, joining thread . . .')
         thread.doloop = None
         thread.doquit = True
         #time.sleep(2)

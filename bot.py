@@ -139,7 +139,7 @@ class ShadowThread():
       duration -= int(time.time() - starttime)
 
   ''' awaitresponse
-      Returns a list beginning with the line containing the quitmsg parameter once received
+      Returns the string with the line containing the quitmsg parameter
 
       Parameters
       quitmsg     - string, this is the string we are waiting to receive
@@ -347,15 +347,14 @@ class ShadowThread():
           # Less than 50% health
           elif health < 0.5:
             docalm = True
-          # Less than 70% health
+          # Less than 80% health
           elif health < 0.8 and (time.time() - calmcasttime) > calmcastgap:
             docalm = True
-          if doheal or docalm:
-            if doheal:
-              self.irc.privmsg(self.lambbot, '#cast heal ' + player)
-            else:
-              self.irc.privmsg(self.lambbot, '#cast calm ' + player)
-              calmcasttime = time.time()
+          if doheal:
+            self.irc.privmsg(self.lambbot, '#cast heal ' + player)
+          elif docalm:
+            self.irc.privmsg(self.lambbot, '#cast calm ' + player)
+            calmcasttime = time.time()
     # return line ending combat
     return msg
 
@@ -555,7 +554,7 @@ class ShadowThread():
           # Increase the iteration counter
           fncounter+=1
           # Short sleep
-          time.sleep(3)
+          self.irc.get_response(timeout=5)
       else:
         # There was no function, need to continually check for PING messages
         # The get_response function has a timeout
@@ -585,6 +584,7 @@ class ShadowThread():
         numitems = numitems.split(': ')[1]
       numitems = int(numitems)
       pos = len(items)-1
+      self.irc.get_response()
       while pos > 0:
         if numitems < self.invstop:
           break
@@ -690,4 +690,5 @@ class ShadowThread():
     self.irc.privmsg(self.lambbot, '#sleep')
     self.awaitresponse('ready to go')
     self.irc.privmsg(self.lambbot, '#cast teleportii chicago_hotel')
+    self.irc.get_response()
 
