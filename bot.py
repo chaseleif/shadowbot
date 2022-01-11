@@ -182,13 +182,13 @@ class ShadowThread():
           # Ensure there are only bums and get a count of them
           parts = line.split(', ')
           bumcount = 0
-          for part in line.split(', '):
+          for part in parts:
             if 'Bum' in part:
               bumcount += 1
             else:
               bumcount = self.bumsleft + 1
               break
-          # Don't kill more bums than needed or other NPC types
+          # Don't kill more bums than needed (or other NPC types)
           if bumcount <= self.bumsleft:
             self.irc.privmsg(self.lambbot, '#fight')
             response = self.awaitresponse('You ENCOUNTER')
@@ -252,6 +252,9 @@ class ShadowThread():
       line = line[14:]
     else: # 'You are fighting against' in line:
       line = '.'.join(line.split('.')[:-2])[25:]
+      # If we are in a party . . .
+      if 'you are fighting' in line:
+        line = line.split('against ')[1]
     parts = line.split(', ')
 
     enemies = {}
@@ -288,7 +291,8 @@ class ShadowThread():
     calmcasttime = 0
     calmcastgap = 90
 
-    enemyattack = re.compile('[\d]+-[a-zA-Z]+\[[\d]+\]')
+    #enemyattack = re.compile('[\d]+-[a-zA-Z]+\[[\d]+\]')
+    friendlyattack = re.compile('[0-9]+-[a-zA-Z0-9]+{')
 
     while True:
       msg = self.irc.get_response(timeout=45)
@@ -303,7 +307,7 @@ class ShadowThread():
         pass
       # Combat
       elif 'attacks' in line:
-        if line[re.search('[\d]+-',line).span()[1]:].startswith(self.irc.username):
+        if friendlyattack.match(line) is not None:
           # We killed an enemy
           if 'killed them' in line:
             num = int(line.split('attacks ')[1].split('-')[0].strip())
@@ -311,25 +315,26 @@ class ShadowThread():
             if num not in enemies:
               continue
             del(enemies[num])
-            # finished this combat, the top of the outer while will quit
-            if len(enemies) == 0:
+            # it wasn't us that killed the enemy . . .
+            if self.irc.username not in line: continue
+            # when combat finished the top of the outer while will quit
+            if len(enemies) < 2:
               continue
-            if len(enemies) > 1:
-              havetarget = None
+            havetarget = None
+            for enemy in enemies:
+              if 'Drone' in enemies[enemy].name:
+                havetarget = enemy
+                break
+            if havetarget is None:
+              lowlevel = 9999
               for enemy in enemies:
-                if 'Drone' in enemies[enemy].name:
+                if enemies[enemy].level < lowlevel:
+                  lowlevel = enemies[enemy].level
                   havetarget = enemy
-                  break
-              if havetarget is None:
-                lowlevel = 9999
-                for enemy in enemies:
-                  if enemies[enemy].level < lowlevel:
-                    lowlevel = enemies[enemy].level
-                    havetarget = enemy
-              if havetarget is not None:
-                self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
+            if havetarget is not None:
+              self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
         # An enemy attacked
-        elif enemyattack.match(line) is not None:
+        else: #if enemyattack.match(line) is not None:
           # uh oh
           if 'killed' in line:
             raise Exception('Player died')
@@ -578,7 +583,7 @@ class ShadowThread():
       numpages -= 1
       numitems = self.getlambmsg(self.awaitresponse('Your Inventory'))
       items = numitems.split(', ')
-      numitems = items[len(items)-1].split('-')[0].strip()
+      numitems = items[-1].split('-')[0].strip()
       # If there is only one item on this inventory page's list it will be different
       if numitems.startswith('page'):
         numitems = numitems.split(': ')[1]
@@ -659,9 +664,9 @@ class ShadowThread():
           self.irc.privmsg(self.lambbot, '#party')
           response = self.awaitresponse('You are')
           line = self.getlambmsg(response)
-          if 'You are outside' in line or 'You are inside' in line:
+          if 'are outside' in line or 'are inside' in line:
             stopped = True
-          elif 'You are fighting' in line:
+          elif 'are fighting' in line:
             self.handlecombat(response)
             self.irc.privmsg(self.lambbot, '#stop')
           else:
