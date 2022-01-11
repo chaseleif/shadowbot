@@ -69,11 +69,6 @@ class IRCHandler():
     self.poller.register(self.irc, selectors.EVENT_READ)
     # Wait to receive message indicating we are identified with NickServ
     print('    Waiting for identify for ' + botnick)
-    while True:
-      resp = self.get_response()
-      if 'Last login from' in resp:
-        break
-    print('    Identified as ' + botnick)
     self.username = botnick
 
   ''' del

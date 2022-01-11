@@ -171,6 +171,9 @@ class ShadowThread():
       # We have seen our quit msg, return the line
       if quitmsg in line:
         return response
+      # someone said something
+      elif ' says: ' in line:
+        pass
       # We meet a citizen or another player
       # This will occur when we are walking within cities
       elif 'You meet ' in line:
@@ -299,12 +302,17 @@ class ShadowThread():
       line = self.getlambmsg(msg)
       if 'You continue' in line:
         break
-      # ignoring msgs -> misses, loots, casts, moves, uses, loads, gain MP
+      # A calm was cast which did nothing, do a heal
+      # source{123} casts a level 1.2 calm on target{234}. +0HP for 43 seconds, 6s busy. -4.5(9.1/15.3)MP left
+      if 'casts a level' in line:
+        if '+0HP for' in line:
+          target = line.split('.')[1].split(' ')[-1]
+          self.irc.privmsg(self.lambbot, '#cast heal ' + target)
+      # ignoring msgs -> misses, loots, moves, uses, loads, gain MP
       # ('caused damage' contains 'used')
-      elif 'misses' in line or 'received' in line or 'gained' in line \
-          or 'casts' in line or 'moves' in line or 'loads' in line \
-          or ' used ' in line:
-        pass
+      #elif 'misses' in line or 'received' in line or 'gained' in line \
+      #    or 'moves' in line or 'loads' in line or ' used ' in line:
+      #  pass
       # Combat
       elif 'attacks' in line:
         if friendlyattack.match(line) is not None:
