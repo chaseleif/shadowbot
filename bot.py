@@ -316,7 +316,9 @@ class ShadowThread():
               continue
             del(enemies[num])
             # it wasn't us that killed the enemy . . .
-            if self.irc.username not in line: continue
+            if self.irc.username not in line:
+              if havetarget is None or havetarget != num:
+                continue
             # when combat finished the top of the outer while will quit
             if len(enemies) < 2:
               continue
