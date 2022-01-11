@@ -308,11 +308,13 @@ class ShadowThread():
         if '+0HP for' in line:
           target = line.split('.')[1].split(' ')[-1]
           self.irc.privmsg(self.lambbot, '#cast heal ' + target)
-      # ignoring msgs -> misses, loots, moves, uses, loads, gain MP
+      # Ignoring msgs -> misses, loots, moves, uses, loads, gain MP
       # ('caused damage' contains 'used')
-      #elif 'misses' in line or 'received' in line or 'gained' in line \
-      #    or 'moves' in line or 'loads' in line or ' used ' in line:
-      #  pass
+      # We need to either ignore or handle these messages
+      # (they should not fall through to later conditions)
+      elif 'misses' in line or 'received' in line or 'gained' in line \
+          or 'moves' in line or 'loads' in line or ' used ' in line:
+        pass
       # Combat
       elif 'attacks' in line:
         if friendlyattack.match(line) is not None:
