@@ -191,14 +191,17 @@ class IRCHandler():
     # combine any span of spaces into a single
     ret = re.sub(' [ ]+',' ',ret)
 
+    # \245: 165: The yen symbol, replacing with '$'
+    ret = re.sub('[\245]','$',ret)
+
     # \260: 176: the degree symbol, seen in Libera Chat's MOTD
     ret = re.sub('[\260]','*',ret)
 
     # \264: 180: meant to be an apostrophe
     ret = re.sub('[\264]','\'',ret)
 
-    # \245: 165: The yen symbol, replacing with '$'
-    ret = re.sub('[\245]','$',ret)
+    # \366: 246: o umlaut, make an oe
+    ret = re.sub('[\366]','oe',ret)
 
     # \012: 10: '\n'
     # \015: 13: '\r'

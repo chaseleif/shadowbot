@@ -169,6 +169,9 @@ class ShadowThread():
                      periodic approximate time remaining messages
   '''
   def awaitresponse(self, quitmsg, eta=-1):
+    escortmsg = None
+    if self.doloop == 'escort':
+      escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
     print(' ~ Awaiting response: '+str(quitmsg))
     # Repeat until we see the quitmsg parameter
     while True:
@@ -187,6 +190,10 @@ class ShadowThread():
       # The user wants to quit, get back to the loop function
       if self.doquit:
         raise Exception('Player quit')
+      if escortmsg is not None and escortmsg.match(response) is not None:
+        if 'stop' in response[escortmsg.match(response).span()[1]:].strip():
+          raise Exception('Escorted player said to stop')
+        continue
       line = self.getlambmsg(response)
       if line == '':
         continue
@@ -263,6 +270,9 @@ class ShadowThread():
                     Will be the line 'You continue'
   '''
   def handlecombat(self, msg=''):
+    escortmsg = None
+    if self.doloop == 'escort':
+      escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
     class ShadowEnemy():
       name = ''
       distance = 0
@@ -321,6 +331,11 @@ class ShadowThread():
 
     while True:
       msg = self.irc.get_response(timeout=45)
+      if escortmsg is not None and escortmsg.match(msg) is not None:
+        if 'stop' in msg[escortmsg.match(msg).span()[1]:].strip():
+          #raise 'Escorted player said to stop'
+          print('Cannot stop while in combat')
+        continue
       line = self.getlambmsg(msg)
       if 'You continue' in line:
         break
@@ -778,26 +793,7 @@ class ShadowThread():
         self.handlecombat(line)
         continue
       line = getline(line)
-      if 'stop' in line:
-        break
-      elif 'shedinv' in line:
-        if self.invstop > 0:
-          self.shedinv()
-      elif 'doloop ' in line:
-        try:
-          cmd = line.split('doloop ')[1]
-          fncounter = cmd.split(' fncounter ')[1].split(' ')[0]
-          iterations = int(cmd.split(' count ')[1])
-          if iterations == 0: iterations = -1
-          loop = cmd.split(' ')[0]
-          while iterations != 0:
-            getattr(self,loop)(int(fncounter))
-            self.shedinv()
-            if iterations > 0:
-              iterations -= 1
-        except Exception as e:
-          print('Exception: ' + str(e))
-      elif 'docmd ' in line:
+      if 'docmd ' in line:
         cmd = line.split('docmd ')[1]
         bad = ''
         for badcmd in self.badcmds:
@@ -846,5 +842,31 @@ class ShadowThread():
       elif 'help' in line:
         for helpstring in helpstrings:
           self.irc.privmsg(self.escortnick, helpstring)
+      elif 'stop' in line:
+        break
+      elif 'shedinv' in line:
+        if self.invstop > 0:
+          self.shedinv()
+      # We catch the 'stop' command to exit a loop function
+      # If the iterations is zero there is no other stop
+      # Otherwise, the escorted player is required for iterations to end
+      elif 'doloop ' in line:
+        try:
+          cmd = line.split('doloop ')[1]
+          fncounter = cmd.split(' fncounter ')[1].split(' ')[0]
+          iterations = int(cmd.split(' count ')[1])
+          if iterations == 0: iterations = -1
+          loop = cmd.split(' ')[0]
+          while iterations != 0:
+            getattr(self,loop)(int(fncounter))
+            self.shedinv()
+            if iterations > 0:
+              iterations -= 1
+        except Exception as e:
+          if str(e) == 'Escorted player said to stop':
+            self.irc.privmsg(self.escortnick, 'Stopped the doloop method')
+            self.irc.privmsg(self.escortnick, 'Say stop again to quit')
+          else:
+            print('Exception: ' + str(e))
     self.doloop = None
 
