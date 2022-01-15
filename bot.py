@@ -55,6 +55,8 @@ entermsg = {'Redmond':'You arrive at Redmond',
     lambmsg       - An re object to test for and get messages from the Lamb bot
     bumsleft      - A counter of bums needed to kill for the 'Bummer' quest
     precmds       - A list of commands to run before entering a loop function
+    escortnick    - The nick of the person we're escorting
+    badcmds       - A list of commands we will not do during escort
 
     Internal Methods
     getlambmsg    - Returns a string, the stripped message from the Lamb bot (or empty if not a Lamb msg)
@@ -82,11 +84,31 @@ class ShadowThread():
   lambmsg     = None    # a compiled re to test for / retrieve lamb messages
   bumsleft    = 0       # Number of bums left to kill
   precmds     = []      # List of commands to run when beginning doloop()
+  escortnick  = ''      # The nick of the person we're escorting
+  badcmds     = []      # List of commands not to do during escort loop
 
   ''' init
       Assign the lambbot, the irc socket class, and start the thread
   '''
   def __init__(self, irc, lambbot='Lamb3'):
+    # Escort restricted commands
+    self.badcmds = [
+            '#unequip','#uq', # Unequip item
+            '#swap','#sw',    # Swapping items could interfere with shedinv()
+            '#l','#lvlup',    # Use karma to lvlup traits
+            '#reset',         # Delete the player
+            '#aslset',        # Change asl
+            '#rm',           '#running_mode',
+            '#gi','#gy',      # (give item/money)
+            '#give','#giveny',
+            '#dr',           '#drop',
+            '#mo',           '#mount',
+            '#sh',           '#shout',
+            '#w',            '#whisper',
+            '#cm',           '#clan_message',
+            '#pm',           '#party_message',
+            '#ban',          '#unban',
+                   ]
     self.irc = irc
     self.lambbot = lambbot
     self.lambmsg = re.compile('[:]?'+self.lambbot+'[\S]* PRIVMSG '+self.irc.username+' :')
@@ -618,6 +640,22 @@ class ShadowThread():
       if numitems < self.invstop:
         break
 
+  ''' shedinv      - goes to the secondhand and then the bank to shed inventory
+  '''
+  def shedinv(self):
+    self.irc.privmsg(self.lambbot, '#cast teleportii redmond_secondhand')
+    self.awaitresponse('now outside of')
+    self.irc.privmsg(self.lambbot, '#enter')
+    self.awaitresponse('You enter the')
+    self.invflush('#sell')
+    self.irc.get_response()
+    self.irc.privmsg(self.lambbot, '#cast teleport bank')
+    self.awaitresponse('now outside of')
+    self.irc.privmsg(self.lambbot, '#enter')
+    self.awaitresponse('In a bank')
+    self.invflush('#push')
+    self.irc.get_response()
+
   ''' getbacon
       This function goes to the OrkHQ_StorageRoom to battle the FatOrk
       There is some chance that the FatOrk will drop a bacon
@@ -642,6 +680,16 @@ class ShadowThread():
     # Leave the OrkHQ
     self.irc.privmsg(self.lambbot, '#leave')
     self.awaitresponse(entermsg['Redmond'])
+    if self.invstop > 0 and fncounter > 0 and fncounter % 4 == 0:
+      self.shedinv()
+      self.irc.privmsg(self.lambbot, '#cast teleport hotel')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('You enter')
+      self.irc.privmsg(self.lambbot, '#sleep')
+      self.awaitresponse('ready to go')
+      self.irc.privmsg(self.lambbot, '#cast teleport OrkHQ')
+      self.irc.get_response()
 
   ''' explore
       This function simply explores the players current city in a loop.
@@ -688,18 +736,7 @@ class ShadowThread():
     # Not sure if this is the right response if not all locations discovered yet.
     self.awaitresponse('explored')
     if self.invstop > 0:
-      self.irc.privmsg(self.lambbot, '#cast teleportii redmond_secondhand')
-      self.awaitresponse('now outside of')
-      self.irc.privmsg(self.lambbot, '#enter')
-      self.awaitresponse('You enter the')
-      self.invflush('#sell')
-      self.irc.get_response()
-      self.irc.privmsg(self.lambbot, '#cast teleport bank')
-      self.awaitresponse('now outside of')
-      self.irc.privmsg(self.lambbot, '#enter')
-      self.awaitresponse('In a bank')
-      self.invflush('#push')
-      self.irc.get_response()
+      self.shedinv()
     self.irc.privmsg(self.lambbot, '#cast teleport hotel')
     self.awaitresponse('now outside of')
     self.irc.privmsg(self.lambbot, '#enter')
@@ -708,4 +745,106 @@ class ShadowThread():
     self.awaitresponse('ready to go')
     self.irc.privmsg(self.lambbot, '#cast teleportii chicago_hotel')
     self.irc.get_response()
+
+  ''' escort
+      Escort someone else, handling combat / etc automatically
+  '''
+  def escort(self, fncounter=0):
+    if self.escortnick == '':
+      self.doloop = None
+      print('Escort loop chosen but no nick set to escort !')
+      return
+    escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
+    getline = lambda s: '' if escortmsg.match(s) is None \
+                        else s[escortmsg.match(s).span()[1]:].strip()
+    self.irc.privmsg(self.escortnick, 'Tell me when to \"start\"')
+    while True:
+      line = getline(self.irc.get_response())
+      if 'start' in line:
+        break
+    helpstrings = ['Tell me to \"stop\" to quit',
+                   'Tell me to manually \"shedinv\"',
+                   'Tell me to \"doloop explore fncounter 1 count 0\"',
+                   'Tell me to \"docmd #lambcmd\"',
+                   'Tell me to \"sharekp\" to get my known places',
+                   'Tell me to \"sharekw\" to get my known words',
+                   'Ask me for \"help\" to repeat this',
+                  ]
+    for helpstring in helpstrings:
+      self.irc.privmsg(self.escortnick, helpstring)
+    while not self.doquit and 'escort' == str(self.doloop):
+      line = self.irc.get_response()
+      if 'You ENCOUNTER' in self.getlambmsg(line):
+        self.handlecombat(line)
+        continue
+      line = getline(line)
+      if 'stop' in line:
+        break
+      elif 'shedinv' in line:
+        if self.invstop > 0:
+          self.shedinv()
+      elif 'doloop ' in line:
+        try:
+          cmd = line.split('doloop ')[1]
+          fncounter = cmd.split(' fncounter ')[1].split(' ')[0]
+          iterations = int(cmd.split(' count ')[1])
+          if iterations == 0: iterations = -1
+          loop = cmd.split(' ')[0]
+          while iterations != 0:
+            getattr(self,loop)(int(fncounter))
+            self.shedinv()
+            if iterations > 0:
+              iterations -= 1
+        except Exception as e:
+          print('Exception: ' + str(e))
+      elif 'docmd ' in line:
+        cmd = line.split('docmd ')[1]
+        bad = ''
+        for badcmd in self.badcmds:
+          for word in cmd.split(' '):
+            if badcmd == word:
+              bad = badcmd
+              break
+          if bad != '':
+            break
+        if bad == '':
+          self.irc.privmsg(self.lambbot, cmd)
+        else:
+          bad = 'Refusing to do a command containing ' + bad
+          self.irc.privmsg(self.escortnick, bad)
+      elif 'sharekp' in line:
+        self.irc.privmsg(self.escortnick, 'I will tell you when I am done')
+        cities = ['Redmond','Seattle','Delaware','Chicago']
+        cmd = '#givekp ' + self.escortnick + ' '
+        for city in cities:
+          self.irc.privmsg(self.lambbot, '#kp ' + city)
+          fullcmd = cmd + city + '_'
+          response = self.awaitresponse(city).strip('.')
+          places = response.split(':')[-1].split(', ')
+          places[0] = places[0].strip()
+          # Redmond has numbered places, "1-Hotel", . . .
+          # Could check the city or just . . .
+          if any('-' in place for place in places):
+            places = [place.split('-')[1] for place in places]
+          for place in places:
+            self.irc.privmsg(self.lambbot, fullcmd + place)
+            self.irc.get_response(timeout=3)
+          self.irc.get_response(timeout=3)
+        self.irc.privmsg(self.escortnick, 'I am done sharing places !!!')
+      elif 'sharekw' in line:
+        self.irc.privmsg(self.escortnick, 'I will tell you when I am done')
+        self.irc.privmsg(self.lambbot, '#kw')
+        cmd = '#givekw ' + self.escortnick + ' '
+        response = self.awaitresponse('Known Words').strip('.')
+        words = response.split(':')[-1].split(', ')
+        words = [word.strip().split('-')[1] for word in words]
+        for word in words:
+          self.irc.privmsg(self.lambbot, cmd + word)
+          self.irc.get_response(timeout=3)
+        self.irc.get_response(timeout=3)
+        self.irc.privmsg(self.escortnick, 'I am done sharing words !!!')
+      elif 'help' in line:
+        for helpstring in helpstrings:
+          self.irc.privmsg(self.escortnick, helpstring)
+    self.doloop = None
 

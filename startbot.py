@@ -115,6 +115,53 @@ def botcmdmenu():
     else:
       time.sleep(1)
 
+def botescortmenu():
+  while True:
+    print(' ___')
+    print('| Escort options')
+    print('| Escorting: ' + thread.escortnick)
+    print('| 1) Set escort nick')
+    print('| 2) Set prohibited commands for the \"docmd\" command')
+    print('| 3) Accept configuration')
+    print('| 0) Cancel escort')
+    response = input('| Enter your selection: ')
+    if response == '1':
+      thread.escortnick = input('| Enter the nick to escort: ')
+    elif response == '2':
+      while True:
+        print('| Block when any word is matched in an escorted players docmd')
+        print('| Prohibited words: ' + str(thread.badcmds))
+        print('|')
+        print('| Short+long forms of many commands are prohibited by default')
+        print('| Commands affecting our player are also prohibited')
+        print('|')
+        print('| 1) Add prohibited word (must match a word of the command')
+        print('| 2) Remove word from prohibited list')
+        print('| 0) Return to escort options')
+        response = input('| Enter your selection: ')
+        if response == '1':
+          response = input('| Enter new prohibited word: ')
+          if response != '':
+            thread.badcmds.append(response)
+        elif response == '2':
+          response = input('| Enter word to remove: ')
+          try:
+            thread.badcmds.remove(response)
+          except Exception as e:
+            print('Exception: ' + str(e))
+        elif response == '0':
+          break
+        else:
+          time.sleep(1)
+    elif response == '3':
+      if thread.escortnick != '':
+        return 'escort'
+      return None
+    elif response == '0':
+      return None
+    else:
+      time.sleep(1)
+
 def botmenu():
   while True:
     print(' ___')
@@ -125,6 +172,7 @@ def botmenu():
     print('| 4) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
     print('| 5) Change the function loop (' + str(thread.doloop) + ')')
     print('| 6) Set command list to run before function loop')
+    print('| 7) Set escort options')
     if thread.doloop is not None:
       print('| 9) Clear current function loop')
     print('| 0) Return to the main menu')
@@ -165,11 +213,15 @@ def botmenu():
       print('| Available functions are ' + ', '.join(availfuncs))
       newfunc = input('| Enter a function name: ')
       if newfunc in availfuncs:
+        if newfunc == 'escort':
+          newfunc = botescortmenu()
         thread.doloop = newfunc
       else:
         print('| Invalid function name')
     elif response == '6':
       botcmdmenu()
+    elif response == '7':
+      botescortmenu()
     elif response == '9' and thread.doloop is not None:
       thread.doloop = None
     elif response == '0':
