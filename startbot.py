@@ -243,19 +243,24 @@ def ircmenu():
     response = input('| Enter your selection: ')
     if response == '1':
       chan = input('| Enter the channel name to join: ')
-      thread.irc.joinchan(chan)
+      if chan != '1':
+        thread.irc.joinchan(chan)
     elif response == '2':
-      recipient = input('| Enter the recipient: ')
-      if recipient != thread.lambbot:
-        lastrecipient = recipient
-      msg = input('| Enter the message: ')
-      thread.irc.privmsg(recipient, msg, delay=0)
+      if response != '2':
+        recipient = input('| Enter the recipient: ')
+        if recipient != thread.lambbot and recipient != '':
+          lastrecipient = recipient
+        msg = input('| Enter the message: ')
+        if msg != '':
+          thread.irc.privmsg(recipient, msg, delay=0)
     elif response == '3':
       msg = input('| Enter the message: ')
-      thread.irc.privmsg(thread.lambbot, msg, delay=0)
+      if msg != '3':
+        thread.irc.privmsg(thread.lambbot, msg, delay=0)
     elif response == '4' and lastrecipient != '':
       msg = input('| Enter the message: ')
-      thread.irc.privmsg(lastrecipient, msg, delay=0)
+      if msg != '4':
+        thread.irc.privmsg(lastrecipient, msg, delay=0)
     elif response == '0':
       break
     else:

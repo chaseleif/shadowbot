@@ -793,7 +793,8 @@ class ShadowThread():
         self.handlecombat(line)
         continue
       line = getline(line)
-      if 'docmd ' in line:
+      if line == '': continue
+      elif 'docmd ' in line:
         cmd = line.split('docmd ')[1]
         bad = ''
         for badcmd in self.badcmds:
@@ -843,10 +844,12 @@ class ShadowThread():
         for helpstring in helpstrings:
           self.irc.privmsg(self.escortnick, helpstring)
       elif 'stop' in line:
+        self.doloop = None
         break
       elif 'shedinv' in line:
         if self.invstop > 0:
           self.shedinv()
+          self.irc.privmsg(self.escortnick, 'Finished shedding inventory')
       # We catch the 'stop' command to exit a loop function
       # If the iterations is zero there is no other stop
       # Otherwise, the escorted player is required for iterations to end
@@ -858,8 +861,10 @@ class ShadowThread():
           if iterations == 0: iterations = -1
           loop = cmd.split(' ')[0]
           while iterations != 0:
+            for cmd in self.precmds:
+              self.irc.privmsg(self.lambbot, cmd)
+              self.irc.get_response()
             getattr(self,loop)(int(fncounter))
-            self.shedinv()
             if iterations > 0:
               iterations -= 1
         except Exception as e:
@@ -867,6 +872,7 @@ class ShadowThread():
             self.irc.privmsg(self.escortnick, 'Stopped the doloop method')
             self.irc.privmsg(self.escortnick, 'Say stop again to quit')
           else:
-            print('Exception: ' + str(e))
-    self.doloop = None
+            self.irc.privmsg(self.escortnick, 'Exception: ' + str(e))
+      else:
+        print('What do you mean, \"' + line + '\"?')
 
