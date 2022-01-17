@@ -98,7 +98,7 @@ def botcmdmenu():
     print('| Each either:')
     print('| Issue a command to the Lambbot, e.g., \"#cast berzerk\"')
     print('| Send another player a message, e.g., \"msg nick a message\"')
-    print('| Sleep for >= some time, e.g., \"sleep(30)\"')
+    print('| Sleep for about some time, e.g., \"sleep(30)\"')
     print('|')
     print('| Current commands: ' +str(thread.precmds))
     print('| 1) Add a command')

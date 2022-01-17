@@ -61,7 +61,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
 
     Internal Methods
     getlambmsg    - Returns a string, the stripped message from the Lamb bot (or empty if not a Lamb msg)
-    sleepreceive  - 'Sleeps' for >= a duration, responding to IRC messages
+    sleepreceive  - 'Sleeps' for ~ a duration, responding to IRC messages
     awaitresponse - Awaits a specific response from the Lamb bot, returns the string response
     handlecombat  - Called when in combat, returns when combat is over
     cityrank      - Returns an ordinal value for cities, used for subway travel
@@ -144,7 +144,7 @@ class ShadowThread():
 
   ''' sleepreceive
       A receptive sleep, where we continue to accept PING messages
-      Will likely 'sleep' for a slightly longer than requested
+      Will 'sleep' for about as long as requested
 
       Parameters
       duration    - integer, time to 'sleep' for
@@ -155,7 +155,7 @@ class ShadowThread():
       # The user wants to quit, get back to the loop function
       if self.doquit:
         raise Exception('Player quit')
-      print(' ~ About ' + str(duration) + 's remaining')
+      print(' ~ About %.1f seconds remaining' % duration)
       starttime = time.time()
       self.irc.get_response(timeout=duration)
       duration -= time.time() - starttime
@@ -499,7 +499,7 @@ class ShadowThread():
               secs = int(line)
             timeremaining = mins*60 + secs + 10
             print(' ~ It was detected that we are likely in a subway')
-            print(' ~ (sleeping for >= ' + str(timeremaining) + 's)')
+            print(' ~ (sleeping for ~ ' + str(timeremaining) + 's)')
             self.sleepreceive(timeremaining)
           else:
             # Stop travelling
