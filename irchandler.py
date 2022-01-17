@@ -148,6 +148,8 @@ class IRCHandler():
     resp = self.irc.recv(2048).decode('UTF-8')
     # Put any remainder from previous messages at the front
     resp = self.remainder + resp
+    if len(resp) == 0:
+      return ''
     # Clear the remainder
     self.remainder = ''
     # If the final character is not a newline we will have a remainder

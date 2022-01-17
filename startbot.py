@@ -25,15 +25,20 @@
 #  Author: Chase LP
 ###
 
-import time
+import sys, time
 from irchandler import IRCHandler
 from bot import ShadowThread
+
+passfilename = 'pass'
+
+if __name__ == '__main__' and len(sys.argv) == 2:
+  passfilename = sys.argv[1]
 
 # The ShadowThread object we will interact with
 thread = None
 
 # Read the user/pass, connect to irc, instantiate the thread object
-with open('pass') as infile:
+with open(passfilename) as infile:
   lines = infile.readlines()
   # The username is by itself on the first line
   username = lines[0].strip()
@@ -90,7 +95,11 @@ def botcmdmenu():
   while True:
     print(' ___')
     print('| These commands will be ran before the function loop starts')
-    print('| Ensure these are valid commands, e.g., \"#cast berzerk\"')
+    print('| Each either:')
+    print('| Issue a command to the Lambbot, e.g., \"#cast berzerk\"')
+    print('| Send another player a message, e.g., \"msg nick a message\"')
+    print('| Sleep for >= some time, e.g., \"sleep(30)\"')
+    print('|')
     print('| Current commands: ' +str(thread.precmds))
     print('| 1) Add a command')
     if len(thread.precmds) > 0:
@@ -173,6 +182,10 @@ def botmenu():
     print('| 5) Change the function loop (' + str(thread.doloop) + ')')
     print('| 6) Set command list to run before function loop')
     print('| 7) Set escort options')
+    if thread.havetele:
+      print('| 8) Disable teleportation')
+    else:
+      print('| 8) Enable teleportation')
     if thread.doloop is not None:
       print('| 9) Clear current function loop')
     print('| 0) Return to the main menu')
@@ -222,6 +235,9 @@ def botmenu():
       botcmdmenu()
     elif response == '7':
       botescortmenu()
+    elif response == '8':
+      if thread.havetele: thread.havetele = False
+      else: thread.havetele = True
     elif response == '9' and thread.doloop is not None:
       thread.doloop = None
     elif response == '0':
@@ -246,16 +262,17 @@ def ircmenu():
       if chan != '1':
         thread.irc.joinchan(chan)
     elif response == '2':
-      if response != '2':
-        recipient = input('| Enter the recipient: ')
-        if recipient != thread.lambbot and recipient != '':
-          lastrecipient = recipient
-        msg = input('| Enter the message: ')
-        if msg != '':
-          thread.irc.privmsg(recipient, msg, delay=0)
+      recipient = input('| Enter the recipient: ')
+      if recipient == '2':
+        continue
+      if recipient != thread.lambbot and recipient != '':
+        lastrecipient = recipient
+      msg = input('| Enter the message: ')
+      if msg != '' and msg != '2':
+        thread.irc.privmsg(recipient, msg, delay=0)
     elif response == '3':
       msg = input('| Enter the message: ')
-      if msg != '3':
+      if msg != '' and msg != '3':
         thread.irc.privmsg(thread.lambbot, msg, delay=0)
     elif response == '4' and lastrecipient != '':
       msg = input('| Enter the message: ')

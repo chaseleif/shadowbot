@@ -57,9 +57,11 @@ entermsg = {'Redmond':'You arrive at Redmond',
     precmds       - A list of commands to run before entering a loop function
     escortnick    - The nick of the person we're escorting
     badcmds       - A list of commands we will not do during escort
+    havetele      - Boolean indicating whether to teleport or walk
 
     Internal Methods
     getlambmsg    - Returns a string, the stripped message from the Lamb bot (or empty if not a Lamb msg)
+    sleepreceive  - 'Sleeps' for >= a duration, responding to IRC messages
     awaitresponse - Awaits a specific response from the Lamb bot, returns the string response
     handlecombat  - Called when in combat, returns when combat is over
     cityrank      - Returns an ordinal value for cities, used for subway travel
@@ -86,6 +88,7 @@ class ShadowThread():
   precmds     = []      # List of commands to run when beginning doloop()
   escortnick  = ''      # The nick of the person we're escorting
   badcmds     = []      # List of commands not to do during escort loop
+  havetele    = True    # Whether we can teleport
 
   ''' init
       Assign the lambbot, the irc socket class, and start the thread
@@ -148,17 +151,14 @@ class ShadowThread():
   '''
   def sleepreceive(self, duration=30):
     print(' ~ sleepreceive')
-    while duration > 0:
+    while duration > 1:
       # The user wants to quit, get back to the loop function
       if self.doquit:
         raise Exception('Player quit')
       print(' ~ About ' + str(duration) + 's remaining')
       starttime = time.time()
-      if duration < 30:
-        self.irc.get_response()
-      else:
-        self.irc.get_response(timeout=duration)
-      duration -= int(time.time() - starttime)
+      self.irc.get_response(timeout=duration)
+      duration -= time.time() - starttime
 
   ''' awaitresponse
       Returns the string with the line containing the quitmsg parameter
@@ -186,7 +186,7 @@ class ShadowThread():
         # print the ETA
         print(' ~ About '+str(int(eta-time.time()))+'s remaining')
       # Get text from irc, set the timeout to 2 minutes
-      response = self.irc.get_response(timeout=120)
+      response = self.irc.get_response()
       # The user wants to quit, get back to the loop function
       if self.doquit:
         raise Exception('Player quit')
@@ -196,9 +196,9 @@ class ShadowThread():
         continue
       line = self.getlambmsg(response)
       if line == '':
-        continue
+        pass
       # We have seen our quit msg, return the line
-      if quitmsg in line:
+      elif quitmsg in line:
         return response
       # someone said something
       elif ' says: ' in line:
@@ -226,13 +226,12 @@ class ShadowThread():
             response = self.awaitresponse('You ENCOUNTER')
             response = self.handlecombat(response)
             self.bumsleft -= bumcount
-            continue
         # If we have a message set to say
-        if self.meetsay is not None:
+        elif self.meetsay is not None:
           # Say the message and get their reply
           self.irc.privmsg(self.lambbot, '#say ' + self.meetsay)
           # Give a moment of time for a response . . .
-          self.sleepreceive()
+          self.sleepreceive(duration=5)
         # Say bye to them, this will close an interation with a citizen
         self.irc.privmsg(self.lambbot, '#bye')
       # Starting combat
@@ -334,7 +333,7 @@ class ShadowThread():
       if escortmsg is not None and escortmsg.match(msg) is not None:
         if 'stop' in msg[escortmsg.match(msg).span()[1]:].strip():
           #raise 'Escorted player said to stop'
-          print('Cannot stop while in combat')
+          self.irc.privmsg(self.escortnick, 'Cannot stop while in combat')
         continue
       line = self.getlambmsg(msg)
       if 'You continue' in line:
@@ -471,7 +470,7 @@ class ShadowThread():
         if line.startswith('You are inside') or line.startswith('You are outside'):
           if 'outside' in line:
             self.irc.privmsg(self.lambbot, '#enter')
-            self.irc.get_response()
+            self.sleepreceive(duration=5)
           # If this location is the destination then return
           if location in line:
             return
@@ -505,7 +504,7 @@ class ShadowThread():
           else:
             # Stop travelling
             self.irc.privmsg(self.lambbot, '#stop')
-            self.irc.get_response()
+            self.sleepreceive(duration=5)
             # set the onsubway flag in case we don't stop
             onsubway = True
           break
@@ -576,8 +575,28 @@ class ShadowThread():
           print(' ~  ~~~~~~~~~~')
           try:
             for cmd in self.precmds:
-              self.irc.privmsg(self.lambbot, cmd)
-              self.irc.get_response()
+              try:
+                # Lambbot commands start with an '#'
+                if cmd.startswith('#'):
+                  self.irc.privmsg(self.lambbot, cmd)
+                  self.sleepreceive(duration=5)
+                # We can issue a sleep as "sleep(30)", etc.
+                elif cmd.startswith('sleep('):
+                  duration = cmd.split('(')[1].split(')')[0]
+                  self.sleepreceive(duration=int(duration))
+                # This is intended to be used when we are being escorted
+                #  though could serve any purpose
+                # "msg nick some message"
+                elif cmd.startswith('msg'):
+                  recipient = cmd.split(' ')[1].split(' ')[0]
+                  message = ' '.join(cmd.split(' ')[2:])
+                  self.irc.privmsg(recipient, message)
+                  self.sleepreceive(duration=5)
+                else:
+                  print('Unknown pre-command: \"' + cmd + '\"')
+              except Exception as e:
+                print('Error with pre-command: \"' + cmd + '\"')
+                print('Exception: ' + str(e))
             getattr(self,func)(fncounter)
           except Exception as e:
             self.doloop = None
@@ -608,11 +627,13 @@ class ShadowThread():
           # Increase the iteration counter
           fncounter+=1
           # Short sleep
-          self.irc.get_response(timeout=5)
+          self.sleepreceive(duration=5)
       else:
-        # There was no function, need to continually check for PING messages
-        # The get_response function has a timeout
-        self.irc.get_response(timeout=30)
+        # There was no function
+        # Either handle combat here or ping msgs in the irc handler
+        line = self.irc.get_response()
+        if 'You ENCOUNTER' in self.getlambmsg(line):
+          self.handlecombat(line)
 
   ''' invflush
       If self.invstop is positive, this function {sells,pushes,drops} all items including that number
@@ -638,7 +659,7 @@ class ShadowThread():
         numitems = numitems.split(': ')[1]
       numitems = int(numitems)
       pos = len(items)-1
-      self.irc.get_response()
+      self.sleepreceive(duration=5)
       while pos > 0:
         if numitems < self.invstop:
           break
@@ -649,7 +670,7 @@ class ShadowThread():
         else:
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems))
         # including a get_response to slow messages
-        self.irc.get_response()
+        self.sleepreceive(duration=5)
         numitems -= 1
         pos -= 1
       if numitems < self.invstop:
@@ -658,18 +679,24 @@ class ShadowThread():
   ''' shedinv      - goes to the secondhand and then the bank to shed inventory
   '''
   def shedinv(self):
-    self.irc.privmsg(self.lambbot, '#cast teleportii redmond_secondhand')
-    self.awaitresponse('now outside of')
-    self.irc.privmsg(self.lambbot, '#enter')
+    if self.havetele:
+      self.irc.privmsg(self.lambbot, '#cast teleport secondhand')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.lambbot, '#enter')
+    else:
+      self.irc.privmsg(self.lambbot, '#goto secondhand')
     self.awaitresponse('You enter the')
     self.invflush('#sell')
-    self.irc.get_response()
-    self.irc.privmsg(self.lambbot, '#cast teleport bank')
-    self.awaitresponse('now outside of')
-    self.irc.privmsg(self.lambbot, '#enter')
+    self.sleepreceive(duration=5)
+    if self.havetele:
+      self.irc.privmsg(self.lambbot, '#cast teleport bank')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.lambbot, '#enter')
+    else:
+      self.irc.privmsg(self.lambbot, '#goto bank')
     self.awaitresponse('In a bank')
     self.invflush('#push')
-    self.irc.get_response()
+    self.sleepreceive(duration=5)
 
   ''' getbacon
       This function goes to the OrkHQ_StorageRoom to battle the FatOrk
@@ -685,11 +712,6 @@ class ShadowThread():
     # Get to the OrkHQ
     if fncounter < 1:
       self.gotoloc('Redmond_OrkHQ')
-    else:
-      # We are at the OrkHQ, enter the OrkHQ
-      self.irc.privmsg(self.lambbot, '#enter')
-      # Await the entrance message
-      self.awaitresponse(entermsg['Redmond_OrkHQ'])
     # Go to the storage room, will fight the FatOrk on entrance, then go to the exit
     self.walkpath(['OrkHQ_StorageRoom','Exit'])
     # Leave the OrkHQ
@@ -697,14 +719,22 @@ class ShadowThread():
     self.awaitresponse(entermsg['Redmond'])
     if self.invstop > 0 and fncounter > 0 and fncounter % 4 == 0:
       self.shedinv()
-      self.irc.privmsg(self.lambbot, '#cast teleport hotel')
-      self.awaitresponse('now outside of')
-      self.irc.privmsg(self.lambbot, '#enter')
+      if self.havetele:
+        self.irc.privmsg(self.lambbot, '#cast teleport hotel')
+        self.awaitresponse('now outside of')
+        self.irc.privmsg(self.lambbot, '#enter')
+      else:
+        self.irc.privmsg(self.lambbot, '#goto hotel')
       self.awaitresponse('You enter')
       self.irc.privmsg(self.lambbot, '#sleep')
       self.awaitresponse('ready to go')
-      self.irc.privmsg(self.lambbot, '#cast teleport OrkHQ')
-      self.irc.get_response()
+      if self.havetele:
+        self.irc.privmsg(self.lambbot, '#cast teleport OrkHQ')
+        self.irc.privmsg(self.lambbot, '#enter')
+      else:
+        self.irc.privmsg(self.lambbot, '#goto OrkHQ')
+      # Await the entrance message
+      self.awaitresponse(entermsg['Redmond_OrkHQ'])
 
   ''' explore
       This function simply explores the players current city in a loop.
@@ -745,21 +775,25 @@ class ShadowThread():
             self.handlecombat(response)
             self.irc.privmsg(self.lambbot, '#stop')
           else:
-            self.sleepreceive()
+            self.sleepreceive(duration=5)
             self.irc.privmsg(self.lambbot, '#stop')
     self.irc.privmsg(self.lambbot, '#explore')
     # Not sure if this is the right response if not all locations discovered yet.
     self.awaitresponse('explored')
     if self.invstop > 0:
       self.shedinv()
-    self.irc.privmsg(self.lambbot, '#cast teleport hotel')
-    self.awaitresponse('now outside of')
-    self.irc.privmsg(self.lambbot, '#enter')
+    if self.havetele:
+      self.irc.privmsg(self.lambbot, '#cast teleport hotel')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.lambbot, '#enter')
+    else:
+      self.irc.privmsg(self.lambbot, '#goto hotel')
     self.awaitresponse('You enter')
     self.irc.privmsg(self.lambbot, '#sleep')
     self.awaitresponse('ready to go')
-    self.irc.privmsg(self.lambbot, '#cast teleportii chicago_hotel')
-    self.irc.get_response()
+    #if self.havetele:
+    #  self.irc.privmsg(self.lambbot, '#cast teleportii chicago_hotel')
+    self.sleepreceive(duration=5)
 
   ''' escort
       Escort someone else, handling combat / etc automatically
@@ -825,8 +859,8 @@ class ShadowThread():
             places = [place.split('-')[1] for place in places]
           for place in places:
             self.irc.privmsg(self.lambbot, fullcmd + place)
-            self.irc.get_response(timeout=3)
-          self.irc.get_response(timeout=3)
+            self.sleepreceive(duration=3)
+          self.sleepreceive(duration=3)
         self.irc.privmsg(self.escortnick, 'I am done sharing places !!!')
       elif 'sharekw' in line:
         self.irc.privmsg(self.escortnick, 'I will tell you when I am done')
@@ -837,8 +871,8 @@ class ShadowThread():
         words = [word.strip().split('-')[1] for word in words]
         for word in words:
           self.irc.privmsg(self.lambbot, cmd + word)
-          self.irc.get_response(timeout=3)
-        self.irc.get_response(timeout=3)
+          self.sleepreceive(duration=3)
+        self.sleepreceive(duration=3)
         self.irc.privmsg(self.escortnick, 'I am done sharing words !!!')
       elif 'help' in line:
         for helpstring in helpstrings:
@@ -862,8 +896,8 @@ class ShadowThread():
           loop = cmd.split(' ')[0]
           while iterations != 0:
             for cmd in self.precmds:
-              self.irc.privmsg(self.lambbot, cmd)
-              self.irc.get_response()
+              self.irc.privmsg(self.lambbot, cmd) 
+              self.sleepreceive(duration=3)
             getattr(self,loop)(int(fncounter))
             if iterations > 0:
               iterations -= 1
