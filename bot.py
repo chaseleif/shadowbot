@@ -148,8 +148,9 @@ class ShadowThread():
 
       Parameters
       duration    - integer, time to 'sleep' for
+      earlyexit   - return if we receive something early
   '''
-  def sleepreceive(self, duration=30):
+  def sleepreceive(self, earlyexit=False, duration=30):
     print(' ~ sleepreceive')
     while duration > 1:
       # The user wants to quit, get back to the loop function
@@ -159,6 +160,7 @@ class ShadowThread():
       starttime = time.time()
       self.irc.get_response(timeout=duration)
       duration -= time.time() - starttime
+      if earlyexit: break
 
   ''' awaitresponse
       Returns the string with the line containing the quitmsg parameter
@@ -500,7 +502,7 @@ class ShadowThread():
             timeremaining = mins*60 + secs + 10
             print(' ~ It was detected that we are likely in a subway')
             print(' ~ (sleeping for ~ ' + str(timeremaining) + 's)')
-            self.sleepreceive(timeremaining)
+            self.sleepreceive(duration=timeremaining)
           else:
             # Stop travelling
             self.irc.privmsg(self.lambbot, '#stop')
@@ -659,7 +661,7 @@ class ShadowThread():
         numitems = numitems.split(': ')[1]
       numitems = int(numitems)
       pos = len(items)-1
-      self.sleepreceive(duration=5)
+      self.sleepreceive(earlyexit=True,duration=5)
       while pos > 0:
         if numitems < self.invstop:
           break
@@ -670,7 +672,7 @@ class ShadowThread():
         else:
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems))
         # including a get_response to slow messages
-        self.sleepreceive(duration=5)
+        self.sleepreceive(earlyexit=True,duration=5)
         numitems -= 1
         pos -= 1
       if numitems < self.invstop:
@@ -687,7 +689,7 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#goto secondhand')
     self.awaitresponse('You enter the')
     self.invflush('#sell')
-    self.sleepreceive(duration=5)
+    self.sleepreceive(earlyexit=True,duration=5)
     if self.havetele:
       self.irc.privmsg(self.lambbot, '#cast teleport bank')
       self.awaitresponse('now outside of')
@@ -696,7 +698,7 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#goto bank')
     self.awaitresponse('In a bank')
     self.invflush('#push')
-    self.sleepreceive(duration=5)
+    self.sleepreceive(earlyexit=True,duration=5)
 
   ''' getbacon
       This function goes to the OrkHQ_StorageRoom to battle the FatOrk
@@ -775,7 +777,7 @@ class ShadowThread():
             self.handlecombat(response)
             self.irc.privmsg(self.lambbot, '#stop')
           else:
-            self.sleepreceive(duration=5)
+            self.sleepreceive(earlyexit=True,duration=5)
             self.irc.privmsg(self.lambbot, '#stop')
     self.irc.privmsg(self.lambbot, '#explore')
     # Not sure if this is the right response if not all locations discovered yet.
