@@ -57,7 +57,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
     precmds       - A list of commands to run before entering a loop function
     escortnick    - The nick of the person we're escorting
     badcmds       - A list of commands we will not do during escort
-    havetele      - Boolean indicating whether to teleport or walk
+    cancast       - Boolean indicating whether we can cast tele/calm/heal
     attacklow     - Boolean indicating whether to attack high or low levels
 
     Internal Methods
@@ -89,7 +89,7 @@ class ShadowThread():
   precmds     = []      # List of commands to run when beginning doloop()
   escortnick  = ''      # The nick of the person we're escorting
   badcmds     = []      # List of commands not to do during escort loop
-  havetele    = True    # Whether we can teleport
+  cancast     = True    # Whether we can cast teleport/calm/heal
   attacklow   = True    # Default is to prioritize quicker kills during fight
 
   ''' init
@@ -204,6 +204,10 @@ class ShadowThread():
       # We have seen our quit msg, return the line
       elif quitmsg in line:
         return response
+      # Handle exception messages here:
+      # (ensure exception cases added can handle return values!)
+      elif quitmsg == 'Your Inventory' and line == 'There are no items here':
+        return ''
       # someone said something
       elif ' says: ' in line:
         pass
@@ -402,6 +406,9 @@ class ShadowThread():
           # uh oh
           if 'killed' in line:
             raise Exception('Player died')
+          # Add some logic for using potions / first aid (?)
+          if not self.cancast:
+            continue
           player = line.split('-')[1].split(' ')[-1]
           # "68.7/72.6"
           health = line.split(', ')[1].split('HP')[0]
@@ -661,6 +668,8 @@ class ShadowThread():
       return
     self.irc.privmsg(self.lambbot, '#inventory')
     numpages = self.getlambmsg(self.awaitresponse('Your Inventory'))
+    # This returns empty when we have no inventory !
+    if numpages == '': return
     numpages = int(numpages.split(':')[0].split('/')[1])
     haveqty = re.compile('\([\d]+\)')
     numitems = 0
@@ -695,7 +704,7 @@ class ShadowThread():
   ''' shedinv      - goes to the secondhand and then the bank to shed inventory
   '''
   def shedinv(self):
-    if self.havetele:
+    if self.cancast:
       self.irc.privmsg(self.lambbot, '#cast teleport secondhand')
       self.awaitresponse('now outside of')
       self.irc.privmsg(self.lambbot, '#enter')
@@ -703,7 +712,7 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#goto secondhand')
     self.awaitresponse('You enter the')
     self.invflush('#sell')
-    if self.havetele:
+    if self.cancast:
       self.irc.privmsg(self.lambbot, '#cast teleport bank')
       self.awaitresponse('now outside of')
       self.irc.privmsg(self.lambbot, '#enter')
@@ -733,7 +742,7 @@ class ShadowThread():
     self.awaitresponse(entermsg['Redmond'])
     if self.invstop > 0 and fncounter > 0 and fncounter % 4 == 0:
       self.shedinv()
-      if self.havetele:
+      if self.cancast:
         self.irc.privmsg(self.lambbot, '#cast teleport hotel')
         self.awaitresponse('now outside of')
         self.irc.privmsg(self.lambbot, '#enter')
@@ -742,7 +751,7 @@ class ShadowThread():
       self.awaitresponse('You enter')
       self.irc.privmsg(self.lambbot, '#sleep')
       self.awaitresponse('ready to go')
-      if self.havetele:
+      if self.cancast:
         self.irc.privmsg(self.lambbot, '#cast teleport OrkHQ')
         self.irc.privmsg(self.lambbot, '#enter')
       else:
@@ -796,7 +805,7 @@ class ShadowThread():
     self.awaitresponse('explored')
     if self.invstop > 0:
       self.shedinv()
-    if self.havetele:
+    if self.cancast:
       self.irc.privmsg(self.lambbot, '#cast teleport hotel')
       self.awaitresponse('now outside of')
       self.irc.privmsg(self.lambbot, '#enter')
@@ -805,7 +814,7 @@ class ShadowThread():
     self.awaitresponse('You enter')
     self.irc.privmsg(self.lambbot, '#sleep')
     self.awaitresponse('ready to go')
-    #if self.havetele:
+    #if self.cancast:
     #  self.irc.privmsg(self.lambbot, '#cast teleportii chicago_hotel')
     self.sleepreceive(duration=5)
 
@@ -922,5 +931,5 @@ class ShadowThread():
           else:
             self.irc.privmsg(self.escortnick, 'Exception: ' + str(e))
       else:
-        print('What do you mean, \"' + line + '\"?')
+        self.irc.privmsg(self.escortnick, 'What do you mean, \"' + line + '\"?')
 

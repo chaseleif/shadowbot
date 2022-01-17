@@ -174,18 +174,18 @@ def botescortmenu():
 def travelmenu():
   while True:
     print(' ___')
-    print('| Travel options:')
+    print('| Travel and combat options:')
     print('| 1) Set word to say on \'Meet\' events (' + str(thread.meetsay) + ')')
     print('| 2) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
     if thread.attacklow:
       print('| 3) Set attack priority to high levels first')
     else:
-      print('| 3) Set attack priority to low levels first (default)')
-    if thread.havetele:
-      print('| 4) Disable teleportation')
+      print('| 3) Set attack priority to low levels first (the default)')
+    if thread.cancast:
+      print('| 4) Disable casting (teleport + calm + heal)')
     else:
-      print('| 4) Enable teleportation')
-    print('| 0) Return to the main menu')
+      print('| 4) Enable casting (teleport + calm + heal)')
+    print('| 0) Return to the bot menu')
     response = input('| Enter your selection: ')
     if response == '1':
       newword = input('| Enter what the bot says on meet: ')
@@ -206,8 +206,8 @@ def travelmenu():
       if thread.attacklow: thread.attacklow = False
       else: thread.attacklow = True
     elif response == '4':
-      if thread.havetele: thread.havetele = False
-      else: thread.havetele = True
+      if thread.cancast: thread.cancast = False
+      else: thread.cancast = True
     elif response == '0':
       break
     else:
