@@ -396,7 +396,8 @@ class ShadowThread():
                 if havetarget is None:
                   targetlevel = enemies[enemy].level
                   havetarget = enemy
-                elif dotarget(enemies[enemy].level, targetlevel):
+                elif dotarget(enemies[enemy].level, targetlevel) \
+                  or not self.attacklow and enemies[enemy].level == targetlevel:
                   targetlevel = enemies[enemy].level
                   havetarget = enemy
             if havetarget is not None:
