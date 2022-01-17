@@ -58,6 +58,7 @@ entermsg = {'Redmond':'You arrive at Redmond',
     escortnick    - The nick of the person we're escorting
     badcmds       - A list of commands we will not do during escort
     havetele      - Boolean indicating whether to teleport or walk
+    attacklow     - Boolean indicating whether to attack high or low levels
 
     Internal Methods
     getlambmsg    - Returns a string, the stripped message from the Lamb bot (or empty if not a Lamb msg)
@@ -89,6 +90,7 @@ class ShadowThread():
   escortnick  = ''      # The nick of the person we're escorting
   badcmds     = []      # List of commands not to do during escort loop
   havetele    = True    # Whether we can teleport
+  attacklow   = True    # Default is to prioritize quicker kills during fight
 
   ''' init
       Assign the lambbot, the irc socket class, and start the thread
@@ -271,7 +273,13 @@ class ShadowThread():
                     Will be the line 'You continue'
   '''
   def handlecombat(self, msg=''):
+    # If we are escorting a player make an re object to respond to 'quit'
     escortmsg = None
+    # dotarget returns True if we should prefer the level of x over y
+    # (we always prefer attacking drones over other NPCs)
+    dotarget = lambda x,y: True if self.attacklow and x < y \
+                          else False if self.attacklow \
+                          else True if x > y else False
     if self.doloop == 'escort':
       escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
     class ShadowEnemy():
@@ -307,15 +315,18 @@ class ShadowThread():
           # Save the current target as the index of enemies[]
           havetarget = num
 
-    if havetarget is None:
-      lowlevel = 9999
+    if havetarget is None and len(enemies) > 1:
+      targetlevel = 0
       for enemy in enemies:
-        if enemies[enemy].level < lowlevel:
-          lowlevel = enemies[enemy].level
+        if havetarget is None:
+          targetlevel = enemies[enemy].level
+          havetarget = enemy
+        elif dotarget(enemies[enemy].level, targetlevel):
+          targetlevel = enemies[enemy].level
           havetarget = enemy
         # More 'negative' distance enemies are farther away
         # *Could track our distance for future selections*
-        elif enemies[enemy].level == lowlevel \
+        elif enemies[enemy].level == targetlevel \
           and enemies[enemy].distance > enemies[havetarget].distance:
           havetarget = enemy
 
@@ -376,10 +387,13 @@ class ShadowThread():
                 havetarget = enemy
                 break
             if havetarget is None:
-              lowlevel = 9999
+              targetlevel = 0
               for enemy in enemies:
-                if enemies[enemy].level < lowlevel:
-                  lowlevel = enemies[enemy].level
+                if havetarget is None:
+                  targetlevel = enemies[enemy].level
+                  havetarget = enemy
+                elif dotarget(enemies[enemy].level, targetlevel):
+                  targetlevel = enemies[enemy].level
                   havetarget = enemy
             if havetarget is not None:
               self.irc.privmsg(self.lambbot, '#attack ' + str(havetarget))
@@ -689,7 +703,6 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#goto secondhand')
     self.awaitresponse('You enter the')
     self.invflush('#sell')
-    self.sleepreceive(earlyexit=True,duration=5)
     if self.havetele:
       self.irc.privmsg(self.lambbot, '#cast teleport bank')
       self.awaitresponse('now outside of')
@@ -698,7 +711,6 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#goto bank')
     self.awaitresponse('In a bank')
     self.invflush('#push')
-    self.sleepreceive(earlyexit=True,duration=5)
 
   ''' getbacon
       This function goes to the OrkHQ_StorageRoom to battle the FatOrk

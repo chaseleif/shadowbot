@@ -97,7 +97,7 @@ def botcmdmenu():
     print('| These commands will be ran before the function loop starts')
     print('| Each either:')
     print('| Issue a command to the Lambbot, e.g., \"#cast berzerk\"')
-    print('| Send another player a message, e.g., \"msg nick a message\"')
+    print('| Send a player a message, e.g., \"msg nick a message\"')
     print('| Sleep for about some time, e.g., \"sleep(30)\"')
     print('|')
     print('| Current commands: ' +str(thread.precmds))
@@ -111,13 +111,13 @@ def botcmdmenu():
       newcmd = input('| Enter a new command: ')
       if newcmd != '':
         thread.precmds.append(newcmd)
-    elif len(thread.precmds) > 0 and response == '2':
+    elif response == '2' and len(thread.precmds) > 0:
       delcmd = input('| Enter the command to remove: ')
       try:
         thread.precmds.remove(delcmd)
       except Exception as e:
         print('| Exception: ' + str(e))
-    elif len(thread.precmds) > 0 and response == '3':
+    elif response == '3' and len(thread.precmds) > 0:
       thread.precmds = []
     elif response == '0':
       break
@@ -144,7 +144,7 @@ def botescortmenu():
         print('| Short+long forms of many commands are prohibited by default')
         print('| Commands affecting our player are also prohibited')
         print('|')
-        print('| 1) Add prohibited word (must match a word of the command')
+        print('| 1) Add prohibited word (must match a word of the command)')
         print('| 2) Remove word from prohibited list')
         print('| 0) Return to escort options')
         response = input('| Enter your selection: ')
@@ -171,44 +171,26 @@ def botescortmenu():
     else:
       time.sleep(1)
 
-def botmenu():
+def travelmenu():
   while True:
     print(' ___')
-    print('| Bot (' + thread.irc.username + ') Configuration:')
-    print('| 1) Set the Lamb bot nick (' + thread.lambbot + ')')
-    print('| 2) Set word to say on \'Meet\' events (' + str(thread.meetsay) + ')')
-    print('| 3) Set the stop value for selling / pushing items to bank (' + str(thread.invstop) +')')
-    print('| 4) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
-    print('| 5) Change the function loop (' + str(thread.doloop) + ')')
-    print('| 6) Set command list to run before function loop')
-    print('| 7) Set escort options')
-    if thread.havetele:
-      print('| 8) Disable teleportation')
+    print('| Travel options:')
+    print('| 1) Set word to say on \'Meet\' events (' + str(thread.meetsay) + ')')
+    print('| 2) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
+    if thread.attacklow:
+      print('| 3) Set attack priority to high levels first')
     else:
-      print('| 8) Enable teleportation')
-    if thread.doloop is not None:
-      print('| 9) Clear current function loop')
+      print('| 3) Set attack priority to low levels first (default)')
+    if thread.havetele:
+      print('| 4) Disable teleportation')
+    else:
+      print('| 4) Enable teleportation')
     print('| 0) Return to the main menu')
     response = input('| Enter your selection: ')
     if response == '1':
-      newnick = input('| Enter the Lamb bot\'s nick: ')
-      thread.lambbot = newnick
-    elif response == '2':
       newword = input('| Enter what the bot says on meet: ')
       thread.meetsay = newword
-    elif response == '3':
-      print('| Currently the stop value is ' + str(thread.invstop))
-      print('| Less than 1 indicates to not shed inventory')
-      print('| A positive value indicates the highest number of inventory to sell')
-      newval = input('| Enter the inventory stop position: ')
-      try:
-        newval = int(newval)
-        if newval < 0:
-          newval = 0
-        thread.invstop = newval
-      except Exception as e:
-        print('| Exception: ' + str(e))
-    elif response == '4':
+    elif response == '2':
       print(' ___')
       print('| Currently need to kill ' + str(thread.bumsleft) + ' more bum',end='')
       if thread.bumsleft != 1: print('s',end='')
@@ -220,7 +202,53 @@ def botmenu():
         thread.bumsleft = newval
       except Exception as e:
         print('| Exception: ' + str(e))
+    elif response == '3':
+      if thread.attacklow: thread.attacklow = False
+      else: thread.attacklow = True
+    elif response == '4':
+      if thread.havetele: thread.havetele = False
+      else: thread.havetele = True
+    elif response == '0':
+      break
+    else:
+      time.sleep(1)
+
+def botmenu():
+  while True:
+    print(' ___')
+    print('| Bot (' + thread.irc.username + ') Configuration:')
+    print('| 1) Set the Lamb bot nick (' + thread.lambbot + ')')
+    print('| 2) Set the stop value for selling / pushing items to bank (' + str(thread.invstop) +')')
+    print('| 3) Set travel and combat options')
+    print('| 4) Set escort options')
+    print('| 5) Set command list to run before function loop')
+    print('| 6) Change the function loop (' + str(thread.doloop) + ')')
+    if thread.doloop is not None:
+      print('| 7) Clear current function loop')
+    print('| 0) Return to the main menu')
+    response = input('| Enter your selection: ')
+    if response == '1':
+      newnick = input('| Enter the Lamb bot\'s nick: ')
+      thread.lambbot = newnick
+    elif response == '2':
+      print('| Currently the stop value is ' + str(thread.invstop))
+      print('| Less than 1 indicates to not shed inventory')
+      print('| A positive value indicates the highest number of inventory to sell')
+      newval = input('| Enter the inventory stop position: ')
+      try:
+        newval = int(newval)
+        if newval < 0:
+          newval = 0
+        thread.invstop = newval
+      except Exception as e:
+        print('| Exception: ' + str(e))
+    elif response == '3':
+      travelmenu()
+    elif response == '4':
+      botescortmenu()
     elif response == '5':
+      botcmdmenu()
+    elif response == '6':
       print(' ___')
       print('| Bot function is ' + str(thread.doloop))
       print('| Available functions are ' + ', '.join(availfuncs))
@@ -231,14 +259,7 @@ def botmenu():
         thread.doloop = newfunc
       else:
         print('| Invalid function name')
-    elif response == '6':
-      botcmdmenu()
-    elif response == '7':
-      botescortmenu()
-    elif response == '8':
-      if thread.havetele: thread.havetele = False
-      else: thread.havetele = True
-    elif response == '9' and thread.doloop is not None:
+    elif response == '7' and thread.doloop is not None:
       thread.doloop = None
     elif response == '0':
       break
