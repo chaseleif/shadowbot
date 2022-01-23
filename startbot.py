@@ -132,6 +132,10 @@ def botescortmenu():
     print('| 1) Set escort nick')
     print('| 2) Set prohibited commands for the \"docmd\" command')
     print('| 3) Accept configuration')
+    if thread.escortcasts:
+      print('| 4) Set that your escort can\'t cast spells')
+    else:
+      print('| 4) Set that your escort can cast spells')
     print('| 0) Cancel escort')
     response = input('| Enter your selection: ')
     if response == '1':
@@ -166,6 +170,9 @@ def botescortmenu():
       if thread.escortnick != '':
         return 'escort'
       return None
+    elif response == '4':
+      if thread.escortcasts: thread.escortcasts = False
+      else: thread.escortcasts = True
     elif response == '0':
       return None
     else:

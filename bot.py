@@ -90,6 +90,7 @@ class ShadowThread():
   escortnick  = ''      # The nick of the person we're escorting
   badcmds     = []      # List of commands not to do during escort loop
   cancast     = True    # Whether we can cast teleport/calm/heal
+  escortcasts = False   # Whether our escort can cast spells
   attacklow   = True    # Default is to prioritize quicker kills during fight
 
   ''' init
@@ -205,9 +206,8 @@ class ShadowThread():
       elif quitmsg in line:
         return response
       # Handle exception messages here:
-      # (ensure exception cases added can handle return values!)
-      elif quitmsg == 'Your Inventory' and line == 'There are no items here':
-        return ''
+      #elif quitmsg == 'x' and 'y' in line:
+      #  return 'z'
       # someone said something
       elif ' says: ' in line:
         pass
@@ -235,7 +235,7 @@ class ShadowThread():
             response = self.handlecombat(response)
             self.bumsleft -= bumcount
         # If we have a message set to say
-        elif self.meetsay is not None:
+        elif self.meetsay is not None and self.meetsay != '':
           # Say the message and get their reply
           self.irc.privmsg(self.lambbot, '#say ' + self.meetsay)
           # Give a moment of time for a response . . .
@@ -330,7 +330,7 @@ class ShadowThread():
           havetarget = enemy
         # More 'negative' distance enemies are farther away
         # *Could track our distance for future selections*
-        elif enemies[enemy].level == targetlevel \
+        elif not self.attacklow and enemies[enemy].level == targetlevel \
           and enemies[enemy].distance > enemies[havetarget].distance:
           havetarget = enemy
 
@@ -663,21 +663,46 @@ class ShadowThread():
       If self.invstop is positive, this function {sells,pushes,drops} all items including that number
       This function should be called outside of travel, etc.
       An ideal place for this function would be before a loop function exits
+
+      Parameters
+      inescort    - boolean, whether we are a 'passenger' and our escort teleported us here
+      cmd         - string, the command to use, e.g., "#drop", "#sell", "#push", "#give nick"
   '''
-  def invflush(self, cmd='#drop'):
+  def invflush(self, inescort=False, cmd='#drop'):
     if self.invstop == 0:
       return
+    escortmsg = None
+    getline = None
+    if inescort:
+      escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
+      getline = lambda s: s[escortmsg.match(s).span()[1]:].strip() if escortmsg.match(s) is not None \
+                          else self.getlambmsg(s)
+    if getline is None:
+      getline = lambda s: self.getlambmsg(s)
     self.irc.privmsg(self.lambbot, '#inventory')
-    numpages = self.getlambmsg(self.awaitresponse('Your Inventory'))
-    # This returns empty when we have no inventory !
-    if numpages == '': return
+    readyquit = True if escortmsg is None else False
+    setquit = lambda b,s: True if b or 'Finished shedding inventory' in s else False
+    numpages = ''
+    while True:
+      numpages = getline(self.irc.get_response())
+      if 'Your Inventory' in numpages: break
+      if 'There are no items here' in numpages:
+        if escortmsg is not None:
+          while not readyquit:
+            numpages = getline(self.irc.get_response())
+            readyquit = setquit(readyquit, numpages)
+        return
+      readyquit = setquit(readyquit, numpages)
     numpages = int(numpages.split(':')[0].split('/')[1])
     haveqty = re.compile('\([\d]+\)')
-    numitems = 0
     while True:
       self.irc.privmsg(self.lambbot, '#inventory ' + str(numpages))
       numpages -= 1
-      numitems = self.getlambmsg(self.awaitresponse('Your Inventory'))
+      numitems = 0
+      while True:
+        numitems = getline(self.irc.get_response())
+        if 'Your Inventory' in numitems: break
+        readyquit = setquit(readyquit, numitems)
       items = numitems.split(', ')
       numitems = items[-1].split('-')[0].strip()
       # If there is only one item on this inventory page's list it will be different
@@ -685,7 +710,7 @@ class ShadowThread():
         numitems = numitems.split(': ')[1]
       numitems = int(numitems)
       pos = len(items)-1
-      self.sleepreceive(earlyexit=True,duration=5)
+      readyquit = setquit(readyquit, getline(self.irc.get_response(timeout=2)))
       while pos > 0:
         if numitems < self.invstop:
           break
@@ -695,32 +720,62 @@ class ShadowThread():
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems) + ' ' + qty)
         else:
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems))
-        # including a get_response to slow messages
-        self.sleepreceive(earlyexit=True,duration=5)
+        readyquit = setquit(readyquit, getline(self.irc.get_response(timeout=2)))
         numitems -= 1
         pos -= 1
       if numitems < self.invstop:
         break
+    if escortmsg is not None:
+      while not readyquit:
+        readyquit = setquit(readyquit, getline(self.irc.get_response()))
+    return
 
   ''' shedinv      - goes to the secondhand and then the bank to shed inventory
   '''
   def shedinv(self):
+    inescort = False
     if self.cancast:
       self.irc.privmsg(self.lambbot, '#cast teleport secondhand')
       self.awaitresponse('now outside of')
       self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('You enter the')
+    elif self.escortcasts and self.escortnick != '':
+      self.irc.privmsg(self.lambbot, '#part')
+      self.awaitresponse('left the party')
+      self.irc.privmsg(self.lambbot, '#join ' + self.escortnick)
+      self.awaitresponse('joined the party')
+      self.irc.privmsg(self.escortnick, 'docmd #cast teleport secondhand')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.escortnick, 'docmd #enter')
+      self.awaitresponse('You enter the')
+      self.irc.privmsg(self.escortnick, 'invflush #sell')
+      inescort = True
     else:
       self.irc.privmsg(self.lambbot, '#goto secondhand')
-    self.awaitresponse('You enter the')
-    self.invflush('#sell')
+      self.awaitresponse('You enter the')
+    self.invflush(inescort=inescort, cmd='#sell')
+    inescort = False
     if self.cancast:
       self.irc.privmsg(self.lambbot, '#cast teleport bank')
       self.awaitresponse('now outside of')
       self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('In a bank')
+    elif self.escortcasts and self.escortnick != '':
+      self.irc.privmsg(self.escortnick, 'docmd #cast teleport bank')
+      self.awaitresponse('now outside of')
+      self.irc.privmsg(self.escortnick, 'docmd #enter')
+      self.awaitresponse('You enter the')
+      self.irc.privmsg(self.escortnick, 'invflush #push')
+      inescort = True
     else:
       self.irc.privmsg(self.lambbot, '#goto bank')
-    self.awaitresponse('In a bank')
-    self.invflush('#push')
+      self.awaitresponse('In a bank')
+    self.invflush(inescort=inescort, cmd='#push')
+    if inescort:
+      self.irc.privmsg(self.escortnick, 'docmd #part')
+      self.awaitresponse('left the party')
+      self.irc.privmsg(self.escortnick, 'docmd #join ' + self.irc.username)
+      self.awaitresponse('joined the party')
 
   ''' getbacon
       This function goes to the OrkHQ_StorageRoom to battle the FatOrk
@@ -810,11 +865,29 @@ class ShadowThread():
       self.irc.privmsg(self.lambbot, '#cast teleport hotel')
       self.awaitresponse('now outside of')
       self.irc.privmsg(self.lambbot, '#enter')
+      self.awaitresponse('You enter')
+      self.irc.privmsg(self.lambbot, '#sleep')
+      self.awaitresponse('ready to go')
+    elif self.escortcasts and self.escortnick != '':
+      self.irc.privmsg(self.lambbot, '#part')
+      self.awaitresponse('left the party')
+      self.irc.privmsg(self.lambbot, '#join ' + self.escortnick)
+      self.awaitresponse('joined the party')
+      self.irc.privmsg(self.escortnick, 'docmd #cast teleport hotel')
+      self.awaitresponse('outside of')
+      self.irc.privmsg(self.escortnick, 'docmd #enter')
+      self.awaitresponse('enter the')
+      self.irc.privmsg(self.escortnick, 'docmd #sleep')
+      self.awaitresponse('ready to go')
+      self.irc.privmsg(self.lambbot, '#part')
+      self.awaitresponse('left the party')
+      self.irc.privmsg(self.escortnick, 'docmd #join ' + self.irc.username)
+      self.awaitresponse('joined the party')
     else:
       self.irc.privmsg(self.lambbot, '#goto hotel')
-    self.awaitresponse('You enter')
-    self.irc.privmsg(self.lambbot, '#sleep')
-    self.awaitresponse('ready to go')
+      self.awaitresponse('You enter')
+      self.irc.privmsg(self.lambbot, '#sleep')
+      self.awaitresponse('ready to go')
     #if self.cancast:
     #  self.irc.privmsg(self.lambbot, '#cast teleportii chicago_hotel')
     self.sleepreceive(duration=5)
@@ -837,6 +910,7 @@ class ShadowThread():
         break
     helpstrings = ['Tell me to \"stop\" to quit',
                    'Tell me to manually \"shedinv\"',
+                   'Tell me to \"invflush #sell\" to partially shedinv',
                    'Tell me to \"doloop explore fncounter 1 count 0\"',
                    'Tell me to \"docmd #lambcmd\"',
                    'Tell me to \"sharekp\" to get my known places',
@@ -908,6 +982,11 @@ class ShadowThread():
         if self.invstop > 0:
           self.shedinv()
           self.irc.privmsg(self.escortnick, 'Finished shedding inventory')
+      elif 'invflush' in line:
+        cmd = line.split('invflush ')[1]
+        if self.invstop > 0:
+          self.invflush(cmd=cmd)
+        self.irc.privmsg(self.escortnick, 'Finished shedding inventory')
       # We catch the 'stop' command to exit a loop function
       # If the iterations is zero there is no other stop
       # Otherwise, the escorted player is required for iterations to end
