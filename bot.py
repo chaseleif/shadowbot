@@ -76,12 +76,9 @@ entermsg = {'Redmond':'You arrive at Redmond',
     explore       - Explores the current city on a loop
 '''
 class ShadowThread():
-  th          = None    # A reference to the running thread
   doloop      = None    # None, or a string with the name of the loop function to do
   softquit    = False   # A flag to tell the thread to quit 'soon'
   doquit      = False   # A flag to tell the thread to quit
-  irc         = None    # A reference to the IRC handler class with the current connection
-  lambbot     = ''      # The nick of the Lamb bot we will be talking to
   meetsay     = None    # None, or a string we will say when we 'meet' civilians
   invstop     = 0       # Inventory stop position for selling and getting rid of inventory
   lambmsg     = None    # a compiled re to test for / retrieve lamb messages
@@ -116,10 +113,13 @@ class ShadowThread():
             '#ban',          '#unban',
                    ]
     self.irc = irc
-    self.lambbot = lambbot
-    self.lambmsg = re.compile('[:]?'+self.lambbot+'[\S]* PRIVMSG '+self.irc.username+' :')
+    self.setlambbot(lambbot)
     self.th = threading.Thread(target=self.printloop, daemon=True)
     self.th.start()
+
+  def setlambbot(self, lambbot):
+    self.lambbot = lambbot
+    self.lambmsg = re.compile('[:]?'+self.lambbot+'[\S]* PRIVMSG '+self.irc.username+' :')
 
   ''' del
       Set quit flags and join the thread
@@ -140,9 +140,7 @@ class ShadowThread():
   def getlambmsg(self, msg):
     if self.lambmsg.match(msg) is None:
       return ''
-    msg = msg[self.lambmsg.match(msg).span()[1]:].strip()
-    if msg[-1] == '.':
-      msg = msg[:-1]
+    msg = msg[self.lambmsg.match(msg).span()[1]:].strip().rstrip('.')
     return msg
 
   ''' sleepreceive
@@ -176,7 +174,8 @@ class ShadowThread():
   def awaitresponse(self, quitmsg, eta=-1):
     escortmsg = None
     if self.doloop == 'escort':
-      escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
+      escortmsg = re.compile('[:]?' + self.escortnick + \
+                              '[\S]* PRIVMSG '+self.irc.username+' :')
     print(' ~ Awaiting response: '+str(quitmsg))
     # Repeat until we see the quitmsg parameter
     while True:
@@ -186,7 +185,8 @@ class ShadowThread():
         # ETA currently used only for subway travel
         # If the ETA becomes too negative then there may be some issue
         if eta-time.time() < -60:
-          print(' ~ We are a minute past the ETA ... returning from awaitresponse ... !!!')
+          print(' ~ We are a minute past the ETA ... ' + \
+                  'returning from awaitresponse ... !!!')
           return ''
         # print the ETA
         print(' ~ About '+str(int(eta-time.time()))+'s remaining')
@@ -215,14 +215,13 @@ class ShadowThread():
       # This will occur when we are walking within cities
       elif 'You meet ' in line:
         # We need to kill more bums
-        # 'You meet 1-Bum[7852502](-7.5m)(L5(6))[H]'
-        # 'You meet 1-Bum[7852511](-7.5m)(L5(6))[H], 2-Bum[7852512](-7.5m)(L5(6))[H]'
+        # You meet 1-Bum[7852502](-7.5m)(L5(6))[H]
+        # You meet 1-Bum[7852511](-7.5m)(L5(6))[H], 2-Bum[7852512] ...
         # I have seen bums walking with other NPCs (Police Officers?)
         if self.bumsleft > 0 and 'Bum' in line:
           # Ensure there are only bums and get a count of them
-          parts = line.split(', ')
           bumcount = 0
-          for part in parts:
+          for part in line.split(', '):
             if 'Bum' in part:
               bumcount += 1
             else:
@@ -285,7 +284,8 @@ class ShadowThread():
                           else False if self.attacklow \
                           else True if x > y else False
     if self.doloop == 'escort':
-      escortmsg = re.compile('[:]?'+self.escortnick+'[\S]* PRIVMSG '+self.irc.username+' :')
+      escortmsg = re.compile('[:]?' + self.escortnick + \
+                              '[\S]* PRIVMSG '+self.irc.username+' :')
     class ShadowEnemy():
       name = ''
       distance = 0
@@ -844,18 +844,17 @@ class ShadowThread():
         if 'What now?' in line:
           stopped = True
           break
-        if not stopped:
-          self.irc.privmsg(self.lambbot, '#party')
-          response = self.awaitresponse('You are')
-          line = self.getlambmsg(response)
-          if 'are outside' in line or 'are inside' in line:
-            stopped = True
-          elif 'are fighting' in line:
-            self.handlecombat(response)
-            self.irc.privmsg(self.lambbot, '#stop')
-          else:
-            self.sleepreceive(earlyexit=True,duration=5)
-            self.irc.privmsg(self.lambbot, '#stop')
+        self.irc.privmsg(self.lambbot, '#party')
+        response = self.awaitresponse('You are')
+        line = self.getlambmsg(response)
+        if 'are outside' in line or 'are inside' in line:
+          stopped = True
+        elif 'are fighting' in line:
+          self.handlecombat(response)
+          self.irc.privmsg(self.lambbot, '#stop')
+        else:
+          self.sleepreceive(earlyexit=True,duration=5)
+          self.irc.privmsg(self.lambbot, '#stop')
     self.irc.privmsg(self.lambbot, '#explore')
     # Not sure if this is the right response if not all locations discovered yet.
     self.awaitresponse('explored')

@@ -66,6 +66,7 @@ unavailfuncs = ['islambmsg',
                 'printloop',
                 'handlecombat',
                 'invflush',
+                'setlambbot',
                ]
 
 # Get a list of available functions
@@ -236,7 +237,7 @@ def botmenu():
     response = input('| Enter your selection: ')
     if response == '1':
       newnick = input('| Enter the Lamb bot\'s nick: ')
-      thread.lambbot = newnick
+      thread.setlambbot(newnick)
     elif response == '2':
       print('| Currently the stop value is ' + str(thread.invstop))
       print('| Less than 1 indicates to not shed inventory')
