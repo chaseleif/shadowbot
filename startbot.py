@@ -67,6 +67,9 @@ unavailfuncs = ['islambmsg',
                 'handlecombat',
                 'invflush',
                 'setlambbot',
+                'colorprint',
+                'print',
+                'togglecolors'
                ]
 
 # Get a list of available functions
@@ -319,7 +322,8 @@ def mainmenu():
     print('| 1) Bot configuration')
     print('| 2) IRC commands')
     print('| 3) Quit')
-    print('| 4) Hide menu')
+    print(f'| 4) Toggle colors ({thread.colors})')
+    print('| 5) Hide menu')
     response = input('| Enter your selection: ')
     if response == '1':
       botmenu()
@@ -348,6 +352,8 @@ def mainmenu():
         print('| Goodbye')
         break
     elif response == '4':
+      thread.togglecolors()
+    elif response == '5':
       print(' ___')
       input('| Hiding menu until the enter key is pressed . . .\n')
     else:

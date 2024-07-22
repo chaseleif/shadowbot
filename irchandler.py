@@ -45,11 +45,8 @@ import re, socket, selectors
     joinchan      - Sends a join channel message
 '''
 class IRCHandler():
-  irc        = None # The tcp socket for the irc connection
   remainder  = ''   # Remainder string, used to return only complete lines
   readybuff  = []   # A list of full lines that have been received
-  poller     = None # Polling object for reading the tcp socket
-  username   = ''   # Username of the irc connection
   printinmsg = True # Whether to print incoming irc text
 
   ''' init
@@ -84,6 +81,12 @@ class IRCHandler():
       self.irc.close()
     except Exception as e:
       print('    IRCHandler exception closing socket: ' + str(e))
+
+  ''' toggle_prints
+      Set printinmsg to enable/disable printing of all incoming IRC messages
+  '''
+  def toggle_prints(self):
+    self.printinmsg = not self.printinmsg
 
   ''' send
       Utility function to shorten irc sendall messages
@@ -146,90 +149,75 @@ class IRCHandler():
       return ''
     # Read from the socket
     resp = self.irc.recv(2048).decode('UTF-8')
+
+    # remove garbage special characters
+    # \002: 02: START OF TEXT
+    # \003: 03: END OF TEXT
+    resp = re.sub('[\002\003]','',resp)
+    # turn any tabs into spaces
+    resp = re.sub('\t',' ',resp)
+    # combine any span of spaces into a single
+    resp = re.sub(' [ ]+',' ',resp)
+    # \245: Replace the yen symbol with '$'
+    resp = re.sub('[\245]','$',resp)
+    # \260: the degree symbol
+    resp = re.sub('[\260]','*',resp)
+    # \264: meant to be an apostrophe
+    resp = re.sub('[\264]','\'',resp)
+    # 96: also an apostrophe
+    resp = re.sub(chr(96),'\'',resp)
+    # \366: o umlaut, make an oe
+    resp = re.sub('[\366]','oe',resp)
+    # turn carriage returns into newlines
+    resp = re.sub('\r','\n',resp)
+    # condense any span of newlines into a single
+    resp = re.sub('\n[\n]+','\n',resp)
+
     # Put any remainder from previous messages at the front
     resp = self.remainder + resp
     if len(resp) == 0:
       return ''
     # Clear the remainder
-    self.remainder = ''
+    self.remainder = False
     # If the final character is not a newline we will have a remainder
     if resp[-1] != '\n':
       # Set a flag to indicate that the last line is incomplete
-      self.remainder = '1'
+      self.remainder = True
     # Split the lines into a list for enumeration
     resp = resp.split('\n')
     for i, line in enumerate(resp):
       # Delete empty lines
       if len(line) == 0:
         del(resp[i])
-      # Immediately response to complete PING messages
-      # If this is the final line and we have a remainder the line is incomplete
-      elif line[0:4] == 'PING' and (self.remainder != '1' or i+1 < len(resp)):
-        self.send('PONG' + line[4:])
-        # Delete the PING message from our response
-        del(resp[i])
+      # Immediately respond to complete PING messages
+      elif line.startswith('PING'):
+        # (If this is the final line with no remainder the line is incomplete)
+        if not self.remainder or i+1 < len(resp):
+          self.send('PONG' + line[4:])
+          # Delete the PING message from our response
+          del(resp[i])
     # We have a remainder and at least one line in the list
-    if self.remainder == '1' and len(resp) > 0:
+    if self.remainder and len(resp) > 0:
       # Take the last line as the remainder
       self.remainder = resp[-1]
       # Delete the line from the list
       del(resp[-1])
-    # We have a remainder but no lines in the list, clear the remainder
-    elif self.remainder == '1':
+    # Otherwise there is no remainder
+    else:
       self.remainder = ''
-    # convert the list into a single string
+    # Convert the list into a single string again
     resp = '\n'.join(resp)
-    # if the return string is empty just return it
+    # If the string is empty just return
     if len(resp) == 0:
       return ''
 
-    # remove garbage special characters which mess with message parsing
-
-    # \002: 02: START OF TEXT
-    # \003: 03: END OF TEXT
-    ret = re.sub('[\002\003]','',resp)
-    # turn any tabs into spaces
-    ret = re.sub('\t',' ',ret)
-    # combine any span of spaces into a single
-    ret = re.sub(' [ ]+',' ',ret)
-
-    # \245: 165: The yen symbol, replacing with '$'
-    ret = re.sub('[\245]','$',ret)
-
-    # \260: 176: the degree symbol, seen in Libera Chat's MOTD
-    ret = re.sub('[\260]','*',ret)
-
-    # \264: 180: meant to be an apostrophe
-    ret = re.sub('[\264]','\'',ret)
-
-    # \366: 246: o umlaut, make an oe
-    ret = re.sub('[\366]','oe',ret)
-
-    # \012: 10: '\n'
-    # \015: 13: '\r'
-    # turn carriage returns into newlines
-    ret = re.sub('\r','\n',ret)
-    # condense any span of newlines into a single
-    ret = re.sub('\n[\n]+','\n',ret)
-
-    # Check for other extra chars not yet caught
-    extras = {}
-    for c in ret:
-      if c == '\n': continue
-      if ord(c) < 32 or ord(c) > 126:
-        extras[ord(c)] = 1
-    # I think I may have gotten them all though
-    if len(extras) > 0:
-      print('     ************************')
-      print('           extras -> '+str(list(extras.keys())))
-      print('     ************************')
     # Add any new lines to the ready buffer
-    self.readybuff = [s for s in ret.split('\n') if s != '']
-    # Return whatever we have
+    self.readybuff = [s for s in resp.split('\n') if s != '']
+    # Return what we have
     ret = ''
     if len(self.readybuff) > 0:
       ret = self.readybuff[0]
-      self.readybuff = self.readybuff[1:]
+      del(self.readybuff[0])
       # The flag for printing incoming irc messages is set, print the message
       if self.printinmsg:
         print(ret)
