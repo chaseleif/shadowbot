@@ -44,15 +44,20 @@ with open(passfilename) as infile:
   username = lines[0].strip()
   # The password is by itself on the second line
   userpass = lines[1].strip()
+  # Then the bot nick
+  lambnick = lines[2].strip()
+  # The server is next
+  server = lines[3].strip()
   # Connect to irc with the IRCHandler
   # The IRCHandler object is given to the ShadowThread constructor
   print('| Connecting as user ' + username)
-  thread = ShadowThread(IRCHandler( server='irc.libera.chat',
+  thread = ShadowThread(IRCHandler( server=server,
                                     port=6667,
                                     botnick=username,
                                     botpass=userpass
-                                  )
-                       )
+                                  ),
+                        lambnick)
+  del username, userpass, lambnick, server
 
 # These are methods of the ShadowThread object that are for internal use only
 # These methods should not be called in the printloop method

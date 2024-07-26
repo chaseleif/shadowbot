@@ -58,7 +58,7 @@ class IRCHandler():
     # Get our tcp socket
     self.irc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Connect the socket
-    self.connect(server, port, botnick, botpass)
+    self.connect(server, port, botnick)
     # Make the socket non-blocking
     self.irc.setblocking(False)
     # Initialize the polling object
@@ -66,6 +66,10 @@ class IRCHandler():
     self.poller.register(self.irc, selectors.EVENT_READ)
     # Wait to receive message indicating we are identified with NickServ
     print('    Waiting for identify for ' + botnick)
+    while 'NickServ IDENTIFY' not in self.get_response():
+      continue
+    self.identify(server, botnick, botpass)
+    del botpass
     self.username = botnick
 
   ''' del
@@ -103,16 +107,25 @@ class IRCHandler():
     self.irc.sendall(bytes(msg + '\n', 'UTF-8'))
 
   ''' connect
-      Connects to an irc server:port and sends an identify msg to nickserv
+      Connects to an irc server:port
   '''
-  def connect(self, server, port, botnick, botpass):
+  def connect(self, server, port, botnick):
     print('    Connecting to ' + server + ':' + str(port))
     self.irc.connect((server, port))
     self.send('USER ' + botnick + ' ' + botnick + ' ' + botnick + ' :ShadowBot')
     self.send('NICK ' + botnick)
-    # Do the identify message here so we don't echo the pass to console
-    msg = 'NICKSERV IDENTIFY ' + botnick + ' ' + botpass + '\n'
-    self.irc.sendall(bytes(msg, 'UTF-8'))
+
+  ''' identify
+      Identifies with nickserv
+  '''
+  def identify(self, server, botnick, botpass):
+    msg = 'NICKSERV IDENTIFY '
+    if 'libera' in server:
+      msg += botnick + ' '
+    msg += botpass
+    # Don't use self.send so we don't echo the pass to console
+    self.irc.sendall(bytes(msg + '\n', 'UTF-8'))
+    del msg
 
   ''' privmsg
       Utility function to shorten sending a PRIVMSG to a user/chan
