@@ -148,7 +148,9 @@ class ShadowThread():
   def colorprint(self, *args, **kwargs):
     s = ' '.join([str(arg) for arg in args])
     # Remove any distance, level, race information from enemies
-    for info in re.findall(r'\d+-[^\]]+\]([^ ,]*)',s):
+    for info in re.findall(r'\d+-[A-Z][^\[ ]+([ ][A-Z])?[^\[ ]*\[\d+\]([^ ,]*)',s):
+      info = info[1]
+      if len(info) < 3: continue
       for c in ['\\(','\\)','\\[','\\]']:
         info = re.sub(c,c,info)
       s = re.sub(info,'',s)
@@ -423,7 +425,7 @@ class ShadowThread():
     else:
       self.freezetime = None
     self.incombat = True
-    if 'You ENCOUNTER' in line:
+    if line.startswith('You ENCOUNTER'):
       while line.endswith(','):
         nextline = self.getlambmsg(self.irc.get_response())
         if nextline == '': continue
@@ -449,12 +451,12 @@ class ShadowThread():
         return f' ~ Enemy {self.num}) {self.name} L{self.lvl} at {self.pos}m'
 
     #                     1-Killer[8023221](-8.0m)(L17(34))[H]
-    parts=re.findall(r'(\d+)([^\[]+)\[\d+\]\(([-]?[\d\.]+)m\)\(L(\d+)',line)
+    parts=re.findall(r'(\d+)-([^\[ ]+[ ]?[^\[ ]*)\[\d+\]\(([-]?[\d\.]+)m\)\(L(\d+)', line)
     enemies = {}
     havetarget = None
     for part in parts:
       num = int(part[0])
-      name = part[1][1:]
+      name = part[1]
       pos = float(part[2])
       lvl = int(part[3])
       enemies[num] = ShadowEnemy(num,name,pos,lvl)
