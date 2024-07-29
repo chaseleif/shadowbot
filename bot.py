@@ -187,6 +187,9 @@ class ShadowThread():
     # Sort names by the longest first, some names contain others
     # (GiantTroll contains Troll)
     players.sort(key=lambda s: len(s), reverse=True)
+    # TODO: this is just a temporary fix
+    # The "Ninja" enemy results in the weapon being turned into Ninja
+    s = re.sub('Ninjaken','ninjaken',s)
     # Eat any leading position and trailing chars up to delimiter
     if 'ENCOUNTER' in s or 'You meet' in s:
       for player in players:
@@ -196,6 +199,8 @@ class ShadowThread():
       for player in players:
         s = re.sub(r'(\d+-)?'+player+r'[^, .]+',
                     pcolor+player+bgcolor,s)
+    # TODO: remove this temporary fix
+    s = re.sub('ninjaken','Ninjaken',s)
     # Mark fighting words in purple-ish
     for word in set(re.findall(r'(attacks|killed|damage)',s)):
       s = re.sub(word,'\033[38;5;5;1m'+word+bgcolor,s)
@@ -242,7 +247,7 @@ class ShadowThread():
       earlyexit   - return if we receive something early
   '''
   def sleepreceive(self, earlyexit=False, duration=30):
-    lastprint = 0
+    lastprint = time.time() - 20
     while duration > 1:
       # The user wants to quit, get back to the loop function
       if self.doquit:
@@ -961,14 +966,14 @@ class ShadowThread():
           self.irc.privmsg(self.lambbot, cmd + ' ' + str(numitems))
         numitems -= 1
         pos -= 1
-        line = self.irc.get_response()
-        if escortmatch and escortmatch.match(line):
-          line = line[escortmatch.match(line).span()[1]:].strip().rstrip('.')
-          if 'ready' in line: readyquit = True
-        else:
-          line = self.getlambmsg(line)
-          if line != '': self.print(line)
-        time.sleep(3)
+        for _ in range(3):
+          line = self.irc.get_response(timeout=5)
+          if escortmatch and escortmatch.match(line):
+            line = line[escortmatch.match(line).span()[1]:].strip().rstrip('.')
+            if 'ready' in line: readyquit = True
+          else:
+            line = self.getlambmsg(line)
+            if line != '': self.print(line)
       if numitems < self.invstop:
         break
     if inescort:
