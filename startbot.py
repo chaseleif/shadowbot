@@ -29,7 +29,7 @@ import sys, time
 from irchandler import IRCHandler
 from bot import ShadowThread
 
-passfilename = 'pass'
+passfilename = 'pass3'
 
 if __name__ == '__main__' and len(sys.argv) == 2:
   passfilename = sys.argv[1]
@@ -50,7 +50,7 @@ with open(passfilename) as infile:
   server = lines[3].strip()
   # Connect to irc with the IRCHandler
   # The IRCHandler object is given to the ShadowThread constructor
-  print('| Connecting as user ' + username)
+  print(f'| Connecting as user {username}')
   thread = ShadowThread(IRCHandler( server=server,
                                     port=6667,
                                     botnick=username,
@@ -109,7 +109,7 @@ def botcmdmenu():
     print('| Send a player a message, e.g., \"msg nick a message\"')
     print('| Sleep for about some time, e.g., \"sleep(30)\"')
     print('|')
-    print('| Current commands: ' +str(thread.precmds))
+    print(f'| Current commands: {thread.precmds}')
     print('| 1) Add a command')
     if len(thread.precmds) > 0:
       print('| 2) Remove a command')
@@ -125,7 +125,7 @@ def botcmdmenu():
       try:
         thread.precmds.remove(delcmd)
       except Exception as e:
-        print('| Exception: ' + str(e))
+        print(f'| Exception: {e}')
     elif response == '3' and len(thread.precmds) > 0:
       thread.precmds = []
     elif response == '0':
@@ -137,7 +137,7 @@ def botescortmenu():
   while True:
     print(' ___')
     print('| Escort options')
-    print('| Escorting: ' + thread.escortnick)
+    print(f'| Escorting: {thread.escortnick}')
     print('| 1) Set escort nick')
     print('| 2) Set prohibited commands for the \"docmd\" command')
     print('| 3) Accept configuration')
@@ -152,7 +152,7 @@ def botescortmenu():
     elif response == '2':
       while True:
         print('| Block when any word is matched in an escorted players docmd')
-        print('| Prohibited words: ' + str(thread.badcmds))
+        print(f'| Prohibited words: {thread.badcmds}')
         print('|')
         print('| Short+long forms of many commands are prohibited by default')
         print('| Commands affecting our player are also prohibited')
@@ -170,7 +170,7 @@ def botescortmenu():
           try:
             thread.badcmds.remove(response)
           except Exception as e:
-            print('Exception: ' + str(e))
+            print(f'Exception: {e}')
         elif response == '0':
           break
         else:
@@ -191,8 +191,8 @@ def travelmenu():
   while True:
     print(' ___')
     print('| Travel and combat options:')
-    print('| 1) Set word to say on \'Meet\' events (' + str(thread.meetsay) + ')')
-    print('| 2) Set number of bums needed to kill (' + str(thread.bumsleft) +')')
+    print(f'| 1) Set word to say on \'Meet\' events ({thread.meetsay})')
+    print(f'| 2) Set number of bums needed to kill ({thread.bumsleft})')
     if thread.attacklow:
       print('| 3) Set attack priority to high levels first')
     else:
@@ -201,6 +201,7 @@ def travelmenu():
       print('| 4) Disable casting (teleport + calm + heal)')
     else:
       print('| 4) Enable casting (teleport + calm + heal)')
+    print(f'| 5) Set sell location for explore loop ({thread.store})')
     print('| 0) Return to the bot menu')
     response = input('| Enter your selection: ')
     if response == '1':
@@ -208,7 +209,7 @@ def travelmenu():
       thread.meetsay = newword
     elif response == '2':
       print(' ___')
-      print('| Currently need to kill ' + str(thread.bumsleft) + ' more bum',end='')
+      print(f'| Currently need to kill {thread.bumsleft} more bum',end='')
       if thread.bumsleft != 1: print('s',end='')
       newval = input('\n| Enter the number of bums to kill: ')
       try:
@@ -224,6 +225,10 @@ def travelmenu():
     elif response == '4':
       if thread.cancast: thread.cancast = False
       else: thread.cancast = True
+    elif response == '5':
+      newval = input('| Enter sell location: ')
+      if input(f'| Confirm location \"{newval}\" (y/N): ').startswith('y'):
+        thread.store = newval
     elif response == '0':
       break
     else:
@@ -232,13 +237,14 @@ def travelmenu():
 def botmenu():
   while True:
     print(' ___')
-    print('| Bot (' + thread.irc.username + ') Configuration:')
-    print('| 1) Set the Lamb bot nick (' + thread.lambbot + ')')
-    print('| 2) Set the stop value for selling / pushing items to bank (' + str(thread.invstop) +')')
+    print(f'| Bot ({thread.irc.username}) Configuration:')
+    print(f'| 1) Set the Lamb bot nick ({thread.lambbot})')
+    print('| 2) Set the stop value for selling / pushing items to bank',
+          f'({thread.invstop})')
     print('| 3) Set travel and combat options')
     print('| 4) Set escort options')
     print('| 5) Set command list to run before function loop')
-    print('| 6) Change the function loop (' + str(thread.doloop) + ')')
+    print(f'| 6) Change the function loop ({thread.doloop})')
     if thread.doloop is not None:
       print('| 7) Clear current function loop')
     print('| 0) Return to the main menu')
@@ -247,9 +253,10 @@ def botmenu():
       newnick = input('| Enter the Lamb bot\'s nick: ')
       thread.setlambbot(newnick)
     elif response == '2':
-      print('| Currently the stop value is ' + str(thread.invstop))
+      print(f'| Currently the stop value is {thread.invstop}')
       print('| Less than 1 indicates to not shed inventory')
-      print('| A positive value indicates the highest number of inventory to sell')
+      print('| A positive value indicates',
+            'the highest number of inventory to sell')
       newval = input('| Enter the inventory stop position: ')
       try:
         newval = int(newval)
@@ -257,7 +264,7 @@ def botmenu():
           newval = 0
         thread.invstop = newval
       except Exception as e:
-        print('| Exception: ' + str(e))
+        print(f'| Exception: {e}')
     elif response == '3':
       travelmenu()
     elif response == '4':
@@ -266,8 +273,8 @@ def botmenu():
       botcmdmenu()
     elif response == '6':
       print(' ___')
-      print('| Bot function is ' + str(thread.doloop))
-      print('| Available functions are ' + ', '.join(availfuncs))
+      print(f'| Bot function is {thread.doloop}')
+      print('| Available functions are', ', '.join(availfuncs))
       newfunc = input('| Enter a function name: ')
       if newfunc in availfuncs:
         if newfunc == 'escort':
@@ -289,9 +296,9 @@ def ircmenu():
     print('| IRC Commands:')
     print('| 1) Join a channel')
     print('| 2) Send a message to a nick or channel')
-    print('| 3) Send a message to ' + thread.lambbot)
+    print(f'| 3) Send a message to {thread.lambbot}')
     if lastrecipient != '':
-      print('| 4) Send a message to ' + lastrecipient)
+      print(f'| 4) Send a message to {lastrecipient}')
     print('| 0) Return to the main menu')
     response = input('| Enter your selection: ')
     if response == '1':
@@ -364,9 +371,13 @@ def mainmenu():
     else:
       time.sleep(1)
 
-print('\n _____\n| shadowbot  Copyright (C) 2022  Chase Phelps\n' + \
-      '| This program comes with ABSOLUTELY NO WARRANTY.\n' + \
-      '| This is free software, and you are welcome to redistribute it under certain conditions\n _____')
+print('\n',
+      '_____\n|',
+      'shadowbot  Copyright (C) 2022  Chase Phelps\n|',
+      'This program comes with ABSOLUTELY NO WARRANTY.\n|',
+      'This is free software,',
+      'and you are welcome to redistribute it under certain conditions\n',
+      '_____')
 
 # Begin the driver loop
 mainmenu()
